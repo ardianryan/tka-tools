@@ -9,6 +9,8 @@ dist/
 *.spec.bak
 *.zip
 *.tar.gz
+*.exe
+!static/*.ico
 
 # User Data & Storage (Protect school exam documents & student privacy)
 DokumenTKA/

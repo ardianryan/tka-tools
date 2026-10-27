@@ -8,6 +8,7 @@ param(
 )
 
 $wFormatJPEG = "{B96B3CAE-0728-11D3-9D7B-0000F81EF32E}"
+$convertFilterId = "{42A6E907-1D2F-4B38-AC50-31ADBE2AB3C2}"
 $wia = New-Object -ComObject WIA.DeviceManager
 $scannerInfo = $null
 
@@ -31,20 +32,50 @@ if (-not $scannerInfo -and $DeviceName -and $DeviceName -ne "auto") {
     }
 }
 
-# 3. Fallback: Select first available scanner device
+# 3. Fallback: Prefer physical USB/WIA device (starting with {6BDD1FC6-) over virtual eSCL devices
 if (-not $scannerInfo) {
     foreach ($info in $wia.DeviceInfos) {
-        $scannerInfo = $info
-        break
+        if ($info.DeviceID -like "{6BDD1FC6*") {
+            $scannerInfo = $info
+            break
+        }
+    }
+    if (-not $scannerInfo) {
+        foreach ($info in $wia.DeviceInfos) {
+            $scannerInfo = $info
+            break
+        }
     }
 }
 
 if (-not $scannerInfo) {
-    Write-Output "ERROR: Perangkat scanner tidak ditemukan. Pastikan scanner (Epson/Canon/HP/Brother/dll) terhubung."
-    exit 1
+    $res = @{
+        success = $false
+        msg = "Perangkat scanner tidak ditemukan. Pastikan scanner (Epson/Canon/HP/Brother/dll) terhubung melalui USB atau jaringan."
+    }
+    $res | ConvertTo-Json -Compress
+    exit 0
 }
 
-$device = $scannerInfo.Connect()
+# Connect with retry in case scanner is momentarily locked
+$device = $null
+for ($attempt = 1; $attempt -le 5; $attempt++) {
+    try {
+        $device = $scannerInfo.Connect()
+        if ($device) { break }
+    } catch {
+        Start-Sleep -Milliseconds 800
+    }
+}
+
+if (-not $device) {
+    $res = @{
+        success = $false
+        msg = "Scanner sedang sibuk atau tidak merespons koneksi. Harap tunggu sesaat lalu coba kembali."
+    }
+    $res | ConvertTo-Json -Compress
+    exit 0
+}
 
 # Configure Document Handling (WIA Standard: 1 = Feeder/ADF, 2 = Flatbed)
 try {
@@ -56,15 +87,13 @@ try {
             $handlingProp.Value = 2  # 2 = FLATBED
         }
     }
-} catch {
-    # Flatbed-only scanner or unconfigurable feeder
-}
+} catch {}
 
 # Configure Pages property (WIA Standard: 1 page per Transfer call in loop)
 try {
     $pagesProp = $device.Properties.Item("Pages")
     if ($pagesProp) {
-        $pagesProp.Value = 1  # 1 lembar per siklus transfer COM
+        $pagesProp.Value = 1
     }
 } catch {}
 
@@ -79,7 +108,6 @@ if ($Source -eq "ADF") {
     try {
         $initialStatus = $device.Properties.Item("Document Handling Status").Value
         if (($initialStatus -band 1) -eq 0) {
-            # Tunggu 1.5 detik barangkali kertas baru saja dimasukkan
             Start-Sleep -Milliseconds 1500
             $initialStatus = $device.Properties.Item("Document Handling Status").Value
             if (($initialStatus -band 1) -eq 0) {
@@ -94,6 +122,17 @@ if ($Source -eq "ADF") {
     } catch {}
 }
 
+# Helper ImageProcess untuk kompresi real JPEG (menghindari raw BMP 14 MB)
+$ip = $null
+try {
+    $ip = New-Object -ComObject WIA.ImageProcess
+    $ip.Filters.Add($convertFilterId)
+    $ip.Filters.Item(1).Properties.Item("FormatID").Value = $wFormatJPEG
+    $ip.Filters.Item(1).Properties.Item("Quality").Value = 85
+} catch {
+    $ip = $null
+}
+
 while ($hasMorePages -and $counter -le $maxPages) {
     try {
         $item = $device.Items(1)
@@ -102,65 +141,86 @@ while ($hasMorePages -and $counter -le $maxPages) {
             $item.Properties.Item("Vertical Resolution").Value = $Dpi
         } catch {}
         
-        $image = $item.Transfer($wFormatJPEG)
+        $rawImage = $item.Transfer($wFormatJPEG)
+        
+        # Kompresi ke JPEG standar jika tersedia filter converter
+        $finalImage = $rawImage
+        if ($ip) {
+            try {
+                $finalImage = $ip.Apply($rawImage)
+            } catch {
+                $finalImage = $rawImage
+            }
+        }
+        
+        # Simpan SATU PER SATU langsung ke direktori tujuan (inbox/)
         $timestamp = (Get-Date).ToString("yyyyMMdd_HHmmss")
         $fileName = "$OutputDir\\${FilePrefix}_${timestamp}_$counter.jpg"
-        $image.SaveFile($fileName)
+        $finalImage.SaveFile($fileName)
         $scannedFiles += $fileName
         $counter++
         $consecutiveErrors = 0
         
         if ($Source -ne "ADF") {
-            # Pemindaian flatbed cukup 1 halaman
+            # Flatbed cukup 1 halaman
             break
         }
         
         # Jeda sejenak agar mekanik ADF siap menarik lembar berikutnya
-        Start-Sleep -Milliseconds 1200
+        Start-Sleep -Milliseconds 1000
+        
+        # Cek status sensor kertas setelah lembar selesai ditarik
+        try {
+            $currStatus = $device.Properties.Item("Document Handling Status").Value
+            if (($currStatus -band 1) -eq 0) {
+                # Beri jeda konfirmasi 1 detik memastikan apakah tumpukan benar-benar habis
+                Start-Sleep -Milliseconds 1200
+                $currStatus = $device.Properties.Item("Document Handling Status").Value
+                if (($currStatus -band 1) -eq 0) {
+                    $hasMorePages = $false
+                    break
+                }
+            }
+        } catch {}
         
     } catch {
         $ex = $_.Exception
         $hresult = if ($ex -and $ex.HResult) { $ex.HResult } else { 0 }
         $msg = if ($ex) { $ex.Message.ToLower() } else { "" }
         
-        # 1. 0x80210003 (-2145320957) = WIA_ERROR_PAPER_EMPTY (seluruh lembar di baki ADF telah habis dipindai)
+        # 1. 0x80210003 (-2145320957) = WIA_ERROR_PAPER_EMPTY (kertas habis total)
         if ($hresult -eq -2145320957 -or $msg -like "*empty*" -or $msg -like "*0x80210003*") {
             $hasMorePages = $false
             break
         }
         
-        # 2. Scanner sibuk / sedang memutar rol / menarik lembar berikutnya (0x80210006, warming up, dll)
-        $isBusy = ($hresult -eq -2145320954 -or $msg -like "*busy*" -or $msg -like "*0x80210006*" -or 
-                   $msg -like "*warming*" -or $msg -like "*not ready*" -or $hresult -eq -2147467259 -or
-                   $msg -like "*device is not ready*" -or $msg -like "*80004005*")
-                   
-        if ($isBusy -and $consecutiveErrors -lt 35) {
-            $consecutiveErrors++
-            Start-Sleep -Milliseconds 1500
-            continue
-        }
-        
-        # 3. Jika sensor feeder masih mendeteksi kertas, beri kesempatan rol menarik
+        # 2. Cek apakah sensor ADF masih mendeteksi kertas
+        $isPaperPresent = $true
         try {
             $status = $device.Properties.Item("Document Handling Status").Value
-            if (($status -band 1) -eq 1 -and $consecutiveErrors -lt 25) {
-                $consecutiveErrors++
-                Start-Sleep -Seconds 2
-                continue
+            if (($status -band 1) -eq 0) {
+                $isPaperPresent = $false
             }
         } catch {}
         
-        # 4. Jika sudah ada minimal 1 lembar yang berhasil dipindai dan terjadi akhir dokumen:
-        if ($scannedFiles.Count -gt 0) {
+        # Jika sensor baki sudah kosong dan sudah ada berkas yang tersimpan:
+        if (-not $isPaperPresent -and $scannedFiles.Count -gt 0 -and $consecutiveErrors -ge 3) {
             $hasMorePages = $false
             break
         }
         
-        # 5. Jika belum ada lembar yang terpindai sama sekali, laporkan error
+        # 3. Scanner sibuk / sedang memutar rol / transisi lembar:
+        # TETAP RETRY hingga 35 kali (~45 detik toleransi mekanik)
+        if ($consecutiveErrors -lt 35) {
+            $consecutiveErrors++
+            Start-Sleep -Milliseconds 1200
+            continue
+        }
+        
+        # Jika sudah mencoba 35 kali berturut-turut dan gagal:
         break
     }
 }
-
 
 if ($scannedFiles.Count -eq 0) {
     $res = @{

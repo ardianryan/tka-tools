@@ -1,6 +1,7 @@
 import sys
 import os
 import time
+import socket
 import threading
 import urllib.request
 import logging
@@ -17,12 +18,31 @@ from app import app
 
 logger = logging.getLogger("SmartTKADesktop")
 
-def run_server():
-    app.run(host=SERVER_HOST, port=SERVER_PORT, debug=False, use_reloader=False)
+def find_available_port(host, preferred_port, max_attempts=20):
+    """
+    Finds a port that is truly free to bind, starting from preferred_port.
+    This prevents collisions with dev servers or zombie processes.
+    """
+    for p in range(preferred_port, preferred_port + max_attempts):
+        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+            try:
+                s.bind((host, p))
+                return p
+            except OSError:
+                continue
+    return preferred_port
 
 def main():
+    # Detect available port to prevent port collisions
+    target_port = find_available_port(SERVER_HOST, SERVER_PORT)
+    if target_port != SERVER_PORT:
+        logger.warning("Port %d is already in use. Binding to isolated port %d", SERVER_PORT, target_port)
+
+    def run_server():
+        app.run(host=SERVER_HOST, port=target_port, debug=False, use_reloader=False)
+
     if "--headless" in sys.argv or "--server" in sys.argv:
-        print(f"[*] Starting Smart TKA Scanner Server on http://{SERVER_HOST}:{SERVER_PORT}")
+        print(f"[*] Starting Smart TKA Scanner Server on http://{SERVER_HOST}:{target_port}")
         run_server()
         return
 
@@ -30,10 +50,10 @@ def main():
     server_thread = threading.Thread(target=run_server, daemon=True)
     server_thread.start()
 
-    url = f"http://{SERVER_HOST}:{SERVER_PORT}"
+    url = f"http://{SERVER_HOST}:{target_port}"
     
-    # Wait for Flask to boot up
-    for _ in range(50):
+    # Wait for Flask to boot up on target_port
+    for _ in range(60):
         try:
             with urllib.request.urlopen(f"{url}/api/status", timeout=1):
                 break
