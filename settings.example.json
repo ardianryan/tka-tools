@@ -1,0 +1,41 @@
+{
+  "scanner": {
+    "device_id": "auto",
+    "device_name": "auto",
+    "default_source": "ADF",
+    "dpi": 200
+  },
+  "portal": {
+    "base_url": "https://tka.kemendikdasmen.go.id",
+    "username": "",
+    "password": "",
+    "kd_ujian": "U"
+  },
+  "ocr_rules": {
+    "date_day_map": {
+      "26": 1,
+      "27": 2,
+      "28": 3,
+      "29": 4
+    },
+    "day_name_map": {
+      "senin": 1,
+      "selasa": 2,
+      "rabu": 3,
+      "kamis": 4,
+      "jumat": 5,
+      "sabtu": 6
+    },
+    "room_regex": [
+      "Lab\\s*([1-9])",
+      "Laboratorium\\s*([1-9])",
+      "Ruang\\s*([0-9]+)"
+    ],
+    "server_prefix": "",
+    "min_match_score": 60
+  },
+  "upload": {
+    "delay_min": 3.0,
+    "delay_max": 5.0
+  }
+}

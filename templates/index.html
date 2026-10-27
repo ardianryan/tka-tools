@@ -1,0 +1,1682 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Smart TKA Scanner & Auto-Uploader | Admin Portal</title>
+    <!-- Favicon & App Icons -->
+    <link rel="icon" type="image/x-icon" href="/static/favicon.ico">
+    <link rel="icon" type="image/png" sizes="32x32" href="/static/favicon-32x32.png">
+    <link rel="apple-touch-icon" sizes="192x192" href="/static/icon-192x192.png">
+    <!-- Bootstrap 5 CSS -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    <!-- FontAwesome 6 -->
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css" rel="stylesheet">
+    <!-- Google Fonts: Plus Jakarta Sans & JetBrains Mono -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600&family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <!-- SweetAlert2 -->
+    <link href="https://cdn.jsdelivr.net/npm/sweetalert2@11/dist/sweetalert2.min.css" rel="stylesheet">
+    
+    <style>
+        :root {
+            --sidebar-width: 270px;
+            --topbar-height: 64px;
+            --font-main: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, sans-serif;
+            --font-mono: 'JetBrains Mono', monospace;
+            --bg-body: #f8fafc;
+            --sidebar-bg: #0f172a;
+            --sidebar-hover: #1e293b;
+            --sidebar-active: #2563eb;
+            --border-color: #e2e8f0;
+            --text-primary: #0f172a;
+            --text-secondary: #64748b;
+        }
+
+        body {
+            font-family: var(--font-main);
+            background-color: var(--bg-body);
+            color: var(--text-primary);
+            overflow-x: hidden;
+            font-size: 0.925rem;
+        }
+
+        /* Layout Structure */
+        #app-layout {
+            display: flex;
+            min-height: 100vh;
+        }
+
+        /* Left Sidebar */
+        #sidebar {
+            width: var(--sidebar-width);
+            background-color: var(--sidebar-bg);
+            color: #e2e8f0;
+            display: flex;
+            flex-direction: column;
+            position: fixed;
+            top: 0;
+            bottom: 0;
+            left: 0;
+            z-index: 1040;
+            transition: all 0.25s ease-in-out;
+            border-right: 1px solid rgba(255, 255, 255, 0.05);
+        }
+
+        .sidebar-brand {
+            height: var(--topbar-height);
+            display: flex;
+            align-items: center;
+            padding: 0 1.5rem;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+            font-weight: 700;
+            font-size: 1.05rem;
+            color: #ffffff;
+            letter-spacing: -0.3px;
+        }
+
+        .sidebar-menu {
+            padding: 1.25rem 0.75rem;
+            flex-grow: 1;
+            overflow-y: auto;
+        }
+
+        .menu-category {
+            font-size: 0.725rem;
+            text-transform: uppercase;
+            letter-spacing: 0.75px;
+            font-weight: 700;
+            color: #64748b;
+            padding: 0.5rem 0.75rem;
+            margin-top: 0.5rem;
+        }
+
+        .nav-sidebar-link {
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+            padding: 0.65rem 0.85rem;
+            color: #94a3b8;
+            border-radius: 8px;
+            font-weight: 500;
+            text-decoration: none;
+            transition: all 0.15s ease;
+            margin-bottom: 3px;
+            cursor: pointer;
+        }
+
+        .nav-sidebar-link:hover {
+            color: #ffffff;
+            background-color: var(--sidebar-hover);
+        }
+
+        .nav-sidebar-link.active {
+            color: #ffffff;
+            background-color: var(--sidebar-active);
+            font-weight: 600;
+        }
+
+        .sidebar-footer {
+            padding: 1rem 1.25rem;
+            border-top: 1px solid rgba(255, 255, 255, 0.08);
+            background-color: rgba(0, 0, 0, 0.2);
+            font-size: 0.8rem;
+        }
+
+        /* Main Wrapper */
+        #main-wrapper {
+            margin-left: var(--sidebar-width);
+            flex-grow: 1;
+            display: flex;
+            flex-direction: column;
+            min-width: 0;
+        }
+
+        /* Top Bar */
+        #topbar {
+            height: var(--topbar-height);
+            background: #ffffff;
+            border-bottom: 1px solid var(--border-color);
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 0 1.75rem;
+            position: sticky;
+            top: 0;
+            z-index: 1020;
+        }
+
+        .breadcrumb-item + .breadcrumb-item::before {
+            content: "›";
+            color: #94a3b8;
+        }
+
+        /* Admin KPI Cards */
+        .admin-kpi-card {
+            background: #ffffff;
+            border: 1px solid var(--border-color);
+            border-radius: 10px;
+            padding: 1.25rem;
+            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.02);
+            transition: border-color 0.15s;
+        }
+
+        .admin-kpi-card:hover {
+            border-color: #cbd5e1;
+        }
+
+        .kpi-title {
+            font-size: 0.8rem;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            color: var(--text-secondary);
+            margin-bottom: 0.35rem;
+        }
+
+        .kpi-value {
+            font-size: 1.75rem;
+            font-weight: 700;
+            letter-spacing: -0.5px;
+            line-height: 1.2;
+            color: var(--text-primary);
+        }
+
+        .kpi-meta {
+            font-size: 0.8rem;
+            color: var(--text-secondary);
+            margin-top: 0.5rem;
+        }
+
+        /* Enterprise Table Styling */
+        .admin-card {
+            background: #ffffff;
+            border: 1px solid var(--border-color);
+            border-radius: 10px;
+            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.02);
+            overflow: hidden;
+        }
+
+        .admin-card-header {
+            padding: 1rem 1.5rem;
+            border-bottom: 1px solid var(--border-color);
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            background: #ffffff;
+        }
+
+        .table-admin {
+            margin-bottom: 0;
+            font-size: 0.875rem;
+        }
+
+        .table-admin thead th {
+            background: #f8fafc;
+            color: #475569;
+            font-weight: 600;
+            font-size: 0.775rem;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            padding: 0.75rem 1rem;
+            border-bottom: 1px solid var(--border-color);
+            vertical-align: middle;
+        }
+
+        .table-admin tbody td {
+            padding: 0.85rem 1rem;
+            vertical-align: middle;
+            border-bottom: 1px solid var(--border-color);
+            color: #334155;
+        }
+
+        .table-admin tbody tr:hover {
+            background-color: #f8fafc;
+        }
+
+        /* Badges & Tags */
+        .badge-type-bap {
+            background-color: #f1f5f9;
+            color: #1e40af;
+            border: 1px solid #cbd5e1;
+            font-weight: 600;
+            padding: 0.15rem 0.45rem;
+            border-radius: 3px;
+            font-size: 0.725rem;
+            display: inline-block;
+            font-family: var(--font-mono);
+        }
+
+        .badge-type-dh {
+            background-color: #f1f5f9;
+            color: #854d0e;
+            border: 1px solid #cbd5e1;
+            font-weight: 600;
+            padding: 0.15rem 0.45rem;
+            border-radius: 3px;
+            font-size: 0.725rem;
+            display: inline-block;
+            font-family: var(--font-mono);
+        }
+
+        .badge-status-ready {
+            background-color: #f0fdf4;
+            color: #166534;
+            border: 1px solid #bbf7d0;
+            font-weight: 600;
+            padding: 0.15rem 0.45rem;
+            border-radius: 3px;
+            font-size: 0.725rem;
+            display: inline-block;
+            font-family: var(--font-mono);
+        }
+
+        .badge-status-uploaded {
+            background-color: #ecfdf5;
+            color: #065f46;
+            border: 1px solid #a7f3d0;
+            font-weight: 600;
+            padding: 0.15rem 0.45rem;
+            border-radius: 3px;
+            font-size: 0.725rem;
+            display: inline-block;
+            font-family: var(--font-mono);
+        }
+
+        .badge-status-failed {
+            background-color: #fff1f2;
+            color: #9f1239;
+            border: 1px solid #fecdd3;
+            font-weight: 600;
+            padding: 0.15rem 0.45rem;
+            border-radius: 3px;
+            font-size: 0.725rem;
+            display: inline-block;
+            font-family: var(--font-mono);
+        }
+
+        .badge-status-duplicate {
+            background-color: #f1f5f9;
+            color: #475569;
+            border: 1px solid #cbd5e1;
+            font-weight: 600;
+            padding: 0.15rem 0.45rem;
+            border-radius: 3px;
+            font-size: 0.725rem;
+            display: inline-block;
+            font-family: var(--font-mono);
+        }
+
+        .font-mono {
+            font-family: var(--font-mono);
+            font-variant-numeric: tabular-nums;
+        }
+
+        .doc-thumb {
+            width: 44px;
+            height: 58px;
+            object-fit: cover;
+            border-radius: 3px;
+            border: 1px solid #cbd5e1;
+            cursor: pointer;
+            transition: border-color 0.15s;
+        }
+
+        .doc-thumb:hover {
+            border-color: #2563eb;
+        }
+
+        /* Clean static status dot */
+        .status-dot {
+            display: inline-block;
+            width: 6px;
+            height: 6px;
+            border-radius: 50%;
+            background: #10b981;
+            vertical-align: middle;
+            margin-right: 4px;
+        }
+
+        .status-dot.offline {
+            background: #94a3b8;
+        }
+
+        /* Progress Drawer */
+        #uploadProgressCard {
+            border: 1px solid #cbd5e1;
+            border-left: 4px solid #2563eb;
+            background: #ffffff;
+            border-radius: 10px;
+        }
+
+        .dropzone-box {
+            border: 2px dashed #cbd5e1;
+            border-radius: 10px;
+            padding: 3rem 1.5rem;
+            text-align: center;
+            background: #f8fafc;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .dropzone-box:hover {
+            border-color: #2563eb;
+            background: #f0f7ff;
+        }
+
+        /* Responsive toggle for mobile */
+        @media (max-width: 991.98px) {
+            #sidebar {
+                margin-left: calc(-1 * var(--sidebar-width));
+            }
+            #sidebar.show {
+                margin-left: 0;
+            }
+            #main-wrapper {
+                margin-left: 0;
+            }
+        }
+    </style>
+</head>
+<body>
+
+<div id="app-layout">
+
+    <!-- LEFT SIDEBAR -->
+    <aside id="sidebar">
+        <!-- Brand Header -->
+        <div class="sidebar-brand d-flex align-items-center gap-2">
+            <img src="/static/favicon-32x32.png" alt="TKA Logo" width="22" height="22" class="rounded-1 shadow-sm" style="flex-shrink: 0;">
+            <span class="fw-bold tracking-tight">TKA Auto-Uploader</span>
+        </div>
+
+        <div class="px-3 py-2 text-secondary font-mono small border-bottom border-secondary border-opacity-10" id="sidebarUserCode">
+            Akun Proktor TKA
+        </div>
+
+        <!-- Navigation Menu -->
+        <div class="sidebar-menu">
+            <div class="menu-category">Menu</div>
+            
+            <a class="nav-sidebar-link active" onclick="switchNav('queue')">
+                <i class="fa-solid fa-list-check" style="width: 18px;"></i>
+                <span class="flex-grow-1">Antrean Berkas</span>
+                <span class="font-mono small text-secondary" id="sideBadgeQueue">0</span>
+            </a>
+
+            <a class="nav-sidebar-link" onclick="switchNav('matrix')">
+                <i class="fa-solid fa-table-cells" style="width: 18px;"></i>
+                <span class="flex-grow-1">Jadwal Sesi Portal</span>
+                <span class="font-mono small text-secondary">96</span>
+            </a>
+
+            <a class="nav-sidebar-link" onclick="switchNav('history')">
+                <i class="fa-solid fa-clock-rotate-left" style="width: 18px;"></i>
+                <span class="flex-grow-1">Riwayat Unggah</span>
+                <span class="font-mono small text-secondary" id="sideBadgeHistory">0</span>
+            </a>
+
+            <a class="nav-sidebar-link" onclick="switchNav('upload')">
+                <i class="fa-solid fa-arrow-up-from-bracket" style="width: 18px;"></i>
+                <span>Impor Manual</span>
+            </a>
+
+            <div class="menu-category mt-3">Pemindai</div>
+
+            <a class="nav-sidebar-link" onclick="triggerScan('ADF')">
+                <i class="fa-solid fa-copy" style="width: 18px;"></i>
+                <span>Scan Feeder (ADF)</span>
+            </a>
+
+            <a class="nav-sidebar-link" onclick="triggerScan('Flatbed')">
+                <i class="fa-solid fa-square" style="width: 18px;"></i>
+                <span>Scan Flatbed</span>
+            </a>
+
+            <a class="nav-sidebar-link" onclick="importSampleFolder('DokumenTKA')">
+                <i class="fa-solid fa-folder-open" style="width: 18px;"></i>
+                <span>Impor DokumenTKA</span>
+            </a>
+
+            <a class="nav-sidebar-link" onclick="openScannerSettings()">
+                <i class="fa-solid fa-sliders" style="width: 18px;"></i>
+                <span>Pengaturan Scanner</span>
+            </a>
+        </div>
+
+        <!-- Sidebar Footer / Device Telemetry -->
+        <div class="sidebar-footer">
+            <div class="d-flex align-items-center justify-content-between mb-1 small">
+                <span class="text-secondary">Scanner:</span>
+                <span class="font-mono text-light" id="sideScannerStatus">
+                    <span class="status-dot"></span> <span id="scannerDeviceName">Mendeteksi...</span>
+                </span>
+            </div>
+            <div class="d-flex align-items-center justify-content-between text-secondary small">
+                <span>Portal TKA:</span>
+                <span class="font-mono text-success" id="sidePortalStatus">Online</span>
+            </div>
+            <div class="mt-2 pt-2 border-top border-secondary border-opacity-10 text-secondary opacity-75" style="font-size: 0.68rem; line-height: 1.3;">
+                Alat Bantu Independen (Unofficial) &bull; DWYOR
+            </div>
+        </div>
+    </aside>
+
+    <!-- MAIN CONTENT WRAPPER -->
+    <div id="main-wrapper">
+
+        <!-- TOP BAR -->
+        <header id="topbar">
+            <div class="d-flex align-items-center gap-3">
+                <button class="btn btn-sm btn-outline-secondary d-lg-none" onclick="toggleSidebar()">
+                    <i class="fa-solid fa-bars"></i>
+                </button>
+                <div class="d-none d-sm-block">
+                    <span class="fw-bold text-dark fs-6" id="currentViewTitle">Antrean Berkas</span>
+                </div>
+            </div>
+
+            <!-- Top Actions -->
+            <div class="d-flex align-items-center gap-2">
+                <button class="btn btn-outline-secondary btn-sm px-3" onclick="syncPortalData()">
+                    <i class="fa-solid fa-arrows-rotate me-1"></i> Sinkronisasi
+                </button>
+                <button class="btn btn-primary btn-sm px-3" onclick="triggerScan('ADF')">
+                    <i class="fa-solid fa-plus me-1"></i> Scan ADF
+                </button>
+                <span class="text-secondary font-mono small ms-2 ps-2 border-start" id="topUserDisplay">Proktor Ujian</span>
+            </div>
+        </header>
+
+        <!-- DASHBOARD BODY CONTAINER -->
+        <main class="p-4 flex-grow-1">
+
+            <!-- KPI METRICS ROW -->
+            <div class="row g-3 mb-4">
+                <div class="col-xl-3 col-sm-6">
+                    <div class="admin-kpi-card">
+                        <div class="kpi-title">Total Sesi Portal</div>
+                        <div class="kpi-value font-mono" id="statTotalSlots">96</div>
+                    </div>
+                </div>
+
+                <div class="col-xl-3 col-sm-6">
+                    <div class="admin-kpi-card">
+                        <div class="d-flex justify-content-between align-items-start">
+                            <div>
+                                <div class="kpi-title">Berita Acara (BAP)</div>
+                                <div class="kpi-value font-mono text-primary" id="statBapUploaded">0</div>
+                            </div>
+                            <span class="font-mono small text-secondary" id="pctBap">0/96</span>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="col-xl-3 col-sm-6">
+                    <div class="admin-kpi-card">
+                        <div class="d-flex justify-content-between align-items-start">
+                            <div>
+                                <div class="kpi-title">Daftar Hadir (DH)</div>
+                                <div class="kpi-value font-mono text-success" id="statDhUploaded">0</div>
+                            </div>
+                            <span class="font-mono small text-secondary" id="pctDh">0/96</span>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="col-xl-3 col-sm-6">
+                    <div class="admin-kpi-card">
+                        <div class="d-flex justify-content-between align-items-start">
+                            <div>
+                                <div class="kpi-title">Siap Unggah</div>
+                                <div class="kpi-value font-mono text-warning" id="statReadyQueue">0</div>
+                            </div>
+                            <span class="font-mono small text-secondary" id="statQueueTotal">Antrean: 0</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- LIVE ANTI-BOT UPLOAD PROGRESS DRAWER -->
+            <div class="admin-card p-3 mb-4" id="uploadProgressCard" style="display: none;">
+                <div class="d-flex flex-wrap justify-content-between align-items-center mb-2 gap-2">
+                    <div class="d-flex align-items-center gap-2">
+                        <span class="spinner-border spinner-border-sm text-primary" role="status" id="uploadSpinner"></span>
+                        <span class="fw-bold" id="progressCardTitle">Proses Unggah Antrean</span>
+                    </div>
+                    <div class="d-flex align-items-center gap-3 font-mono small">
+                        <span class="text-success" id="statBadgeSuccess">Sukses: 0</span>
+                        <span class="text-danger" id="statBadgeFailed">Gagal: 0</span>
+                        <span class="text-secondary" id="statBadgeRemaining">Sisa: 0</span>
+                        <div class="btn-group btn-group-sm">
+                            <button class="btn btn-outline-secondary btn-sm" id="btnPauseUpload" onclick="pauseUpload()">Jeda</button>
+                            <button class="btn btn-outline-primary btn-sm d-none" id="btnResumeUpload" onclick="resumeUpload()">Lanjutkan</button>
+                            <button class="btn btn-outline-danger btn-sm" id="btnStopUpload" onclick="stopUpload()">Hentikan</button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Progress Bar -->
+                <div class="progress mb-2" style="height: 10px; border-radius: 2px; background-color: #e2e8f0;">
+                    <div id="uploadProgressBar" class="progress-bar bg-primary font-mono" style="width: 0%; font-size: 0.65rem;">0%</div>
+                </div>
+
+                <div class="d-flex flex-wrap justify-content-between align-items-center small text-secondary">
+                    <div id="uploadCurrentStatus" class="font-mono text-dark">Menyiapkan...</div>
+                    <div id="uploadTargetSlot" class="font-mono text-muted">-</div>
+                </div>
+
+                <div class="mt-2 pt-2 border-top d-flex justify-content-between align-items-center small">
+                    <div class="d-flex align-items-center gap-2">
+                        <span class="text-secondary">Jeda:</span>
+                        <select class="form-select form-select-sm font-mono py-0 ps-2 pe-4" id="selectDelay" style="width: auto;">
+                            <option value="3-5" selected>3 - 5 Detik</option>
+                            <option value="2-4">2 - 4 Detik</option>
+                            <option value="5-8">5 - 8 Detik</option>
+                        </select>
+                    </div>
+                    <div>
+                        <a class="text-decoration-none small text-secondary font-mono" data-bs-toggle="collapse" href="#collapseLog">
+                            Log Konsol (<span id="logCount">0</span>)
+                        </a>
+                    </div>
+                </div>
+
+                <div class="collapse mt-2" id="collapseLog">
+                    <div class="bg-dark text-light p-2 rounded-1 font-mono small" style="max-height: 120px; overflow-y: auto; font-size: 0.75rem;" id="uploadLogTerminal">
+                        [Menunggu proses...]
+                    </div>
+                </div>
+            </div>
+
+            <!-- VIEW 1: ANTREAN & VERIFIKASI (DEFAULT) -->
+            <section id="view-queue" class="content-view">
+                <div class="admin-card">
+                    <div class="admin-card-header">
+                        <div class="d-flex align-items-center gap-3">
+                            <span class="fw-bold">Antrean Berkas OCR</span>
+                            <div class="btn-group btn-group-sm" role="group">
+                                <button type="button" class="btn btn-outline-secondary active btn-sm" onclick="filterQueueType('ALL', this)">Semua (<span id="qCountAll">0</span>)</button>
+                                <button type="button" class="btn btn-outline-secondary btn-sm" onclick="filterQueueType('BAP', this)">BAP (<span id="qCountBap">0</span>)</button>
+                                <button type="button" class="btn btn-outline-secondary btn-sm" onclick="filterQueueType('DH', this)">Daftar Hadir (<span id="qCountDh">0</span>)</button>
+                            </div>
+                        </div>
+                        <div class="d-flex align-items-center gap-2">
+                            <button class="btn btn-outline-secondary btn-sm" onclick="clearQueue()">Kosongkan</button>
+                            <button class="btn btn-primary btn-sm px-3" id="btnUploadAll" onclick="uploadAllReady()">
+                                Unggah Antrean (<span id="readyCountBtn">0</span>)
+                            </button>
+                        </div>
+                    </div>
+
+                    <div class="table-responsive">
+                        <table class="table table-admin align-middle mb-0" id="queueTable">
+                            <thead>
+                                <tr>
+                                    <th style="width: 50px;">Pratinjau</th>
+                                    <th>Nama Berkas</th>
+                                    <th>Deteksi OCR</th>
+                                    <th>Target Jadwal Portal</th>
+                                    <th style="width: 140px;">Kecocokan</th>
+                                    <th style="width: 90px;">Status</th>
+                                    <th style="width: 110px;" class="text-end pe-3">Aksi</th>
+                                </tr>
+                            </thead>
+                            <tbody id="queueTableBody">
+                                <tr>
+                                    <td colspan="7" class="text-center py-5 text-muted">
+                                        Antrean kosong. Gunakan <b>Scan ADF</b> atau <b>Impor</b> untuk menambahkan berkas.
+                                    </td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </section>
+
+            <!-- VIEW 2: MATRIKS JADWAL PORTAL TKA -->
+            <section id="view-matrix" class="content-view" style="display: none;">
+                <div class="admin-card p-4">
+                    <div class="d-flex flex-wrap justify-content-between align-items-center mb-3 gap-2">
+                        <div>
+                            <h6 class="fw-bold mb-0">Matriks 96 Sesi Ujian</h6>
+                        </div>
+                        <div class="d-flex align-items-center gap-2">
+                            <input type="text" id="filterMatrix" class="form-control form-control-sm font-mono" placeholder="Cari Hari/Sesi/Lab/Mapel..." onkeyup="filterMatrixTable()" style="width: 250px;">
+                            <button class="btn btn-sm btn-outline-secondary" onclick="syncPortalData()">
+                                <i class="fa-solid fa-arrows-rotate"></i>
+                            </button>
+                        </div>
+                    </div>
+
+                    <div class="table-responsive" style="max-height: 580px; overflow-y: auto;">
+                        <table class="table table-admin table-bordered mb-0" id="matrixTable">
+                            <thead class="sticky-top">
+                                <tr>
+                                    <th class="text-center" style="width: 50px;">Gel</th>
+                                    <th style="width: 80px;">Hari</th>
+                                    <th style="width: 80px;">Sesi</th>
+                                    <th>Ruang / Laboratorium</th>
+                                    <th>Mata Pelajaran</th>
+                                    <th>Kode Server</th>
+                                    <th class="text-center" style="width: 110px;">Berita Acara</th>
+                                    <th class="text-center" style="width: 110px;">Daftar Hadir</th>
+                                </tr>
+                            </thead>
+                            <tbody id="matrixTableBody">
+                                <tr>
+                                    <td colspan="8" class="text-center py-4 text-muted">Memuat jadwal...</td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </section>
+
+            <!-- VIEW 3: RIWAYAT & LOG LAPORAN -->
+            <section id="view-history" class="content-view" style="display: none;">
+                <div class="admin-card p-4">
+                    <div class="d-flex flex-wrap justify-content-between align-items-center mb-3 gap-2">
+                        <div>
+                            <h6 class="fw-bold mb-0">Riwayat Unggah</h6>
+                        </div>
+                        <div class="d-flex align-items-center gap-2">
+                            <a href="/download/riwayat_csv" class="btn btn-outline-secondary btn-sm">
+                                <i class="fa-solid fa-download me-1"></i> Unduh CSV
+                            </a>
+                            <button class="btn btn-outline-secondary btn-sm" onclick="loadHistory()">
+                                <i class="fa-solid fa-rotate me-1"></i> Segarkan
+                            </button>
+                        </div>
+                    </div>
+
+                    <div class="table-responsive" style="max-height: 560px; overflow-y: auto;">
+                        <table class="table table-admin table-bordered mb-0">
+                            <thead class="sticky-top">
+                                <tr>
+                                    <th style="width: 40px;" class="text-center">No</th>
+                                    <th style="width: 140px;">Waktu</th>
+                                    <th style="width: 80px;">Jenis</th>
+                                    <th style="width: 110px;">Hari & Sesi</th>
+                                    <th>Ruang / Lab</th>
+                                    <th>Server & Mapel</th>
+                                    <th>Nama Berkas</th>
+                                    <th class="text-center" style="width: 80px;">Status</th>
+                                    <th>Keterangan</th>
+                                </tr>
+                            </thead>
+                            <tbody id="historyTableBody">
+                                <tr>
+                                    <td colspan="9" class="text-center py-4 text-muted">Belum ada riwayat unggahan.</td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </section>
+
+            <!-- VIEW 4: IMPOR MANUAL / DRAG & DROP -->
+            <section id="view-upload" class="content-view" style="display: none;">
+                <div class="admin-card p-5">
+                    <div class="dropzone-box" onclick="document.getElementById('fileInput').click()">
+                        <i class="fa-solid fa-arrow-up-from-bracket text-secondary fs-3 mb-2"></i>
+                        <div class="fw-bold text-dark mb-1">Pilih Berkas Scan</div>
+                        <p class="text-secondary small mb-0 font-mono">Format JPG atau PNG</p>
+                        <input type="file" id="fileInput" class="d-none" multiple accept="image/jpeg,image/png" onchange="handleFileSelect(event)">
+                    </div>
+                </div>
+            </section>
+
+        </main>
+
+    </div>
+
+</div>
+
+<!-- PREVIEW & INSPECTOR MODAL -->
+<div class="modal fade" id="previewModal" tabindex="-1">
+    <div class="modal-dialog modal-xl modal-dialog-centered">
+        <div class="modal-content border-0 shadow-lg" style="border-radius: 12px; overflow: hidden;">
+            <div class="modal-header py-3 px-4 bg-light border-bottom">
+                <div class="d-flex align-items-center gap-2">
+                    <i class="fa-solid fa-magnifying-glass text-primary"></i>
+                    <h6 class="modal-title fw-bold text-dark mb-0">Inspeksi Dokumen & Metadata OCR</h6>
+                </div>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body p-0">
+                <div class="row g-0">
+                    <div class="col-lg-7 bg-dark d-flex align-items-center justify-content-center p-3" style="max-height: 75vh; overflow: auto;">
+                        <img id="previewImage" src="" class="img-fluid rounded shadow" style="max-height: 70vh;">
+                    </div>
+                    <div class="col-lg-5 p-4 d-flex flex-direction-column" style="max-height: 75vh; overflow-y: auto;">
+                        <div class="mb-3">
+                            <span class="text-secondary small fw-semibold text-uppercase font-mono">Ekstraksi Mesin OCR</span>
+                            <table class="table table-sm table-borderless mt-2 mb-0 small">
+                                <tr><th style="width: 130px;" class="text-secondary">Tipe Berkas:</th><td id="mDocType" class="fw-bold">-</td></tr>
+                                <tr><th class="text-secondary">Hari / Tanggal:</th><td id="mHariTgl">-</td></tr>
+                                <tr><th class="text-secondary">Sesi Ujian:</th><td id="mSesi" class="fw-bold">-</td></tr>
+                                <tr><th class="text-secondary">Ruang / Lab:</th><td id="mRuang">-</td></tr>
+                                <tr><th class="text-secondary">ID Server:</th><td id="mServer" class="font-mono">-</td></tr>
+                                <tr><th class="text-secondary">Mata Pelajaran:</th><td id="mMapel">-</td></tr>
+                            </table>
+                        </div>
+
+                        <hr class="my-3">
+
+                        <div class="mb-3">
+                            <span class="text-secondary small fw-semibold text-uppercase font-mono">Pencocokan Jadwal Portal</span>
+                            <div class="p-3 bg-light rounded border mt-2 small" id="mMatchedDetails">
+                                -
+                            </div>
+                        </div>
+
+                        <div class="mb-3">
+                            <label class="form-label small fw-bold text-secondary">Ubah Pilihan Jadwal Manual:</label>
+                            <select class="form-select form-select-sm font-mono" id="slotSelector">
+                                <option value="">Pilih Jadwal Pengganti...</option>
+                            </select>
+                        </div>
+
+                        <button class="btn btn-primary w-100 fw-semibold btn-sm py-2" onclick="saveManualSlot()">
+                            <i class="fa-solid fa-check me-1"></i> Simpan Pilihan Jadwal
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- SETTINGS MODAL -->
+<div class="modal fade" id="settingsModal" tabindex="-1">
+    <div class="modal-dialog modal-lg modal-dialog-centered">
+        <div class="modal-content border-0 shadow">
+            <div class="modal-header py-3 px-4 bg-light border-bottom">
+                <span class="fw-bold">Pengaturan Aplikasi</span>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body p-4">
+                <ul class="nav nav-tabs mb-3 font-mono small" id="settingsTab" role="tablist">
+                    <li class="nav-item">
+                        <button class="nav-link active" data-bs-toggle="tab" data-bs-target="#tab-scanner">1. Perangkat Scanner</button>
+                    </li>
+                    <li class="nav-item">
+                        <button class="nav-link" data-bs-toggle="tab" data-bs-target="#tab-portal">2. Akun Portal TKA</button>
+                    </li>
+                    <li class="nav-item">
+                        <button class="nav-link" data-bs-toggle="tab" data-bs-target="#tab-rules">3. Aturan OCR & Ruang</button>
+                    </li>
+                </ul>
+
+                <div class="tab-content" id="settingsTabContent">
+                    <!-- Tab Scanner -->
+                    <div class="tab-pane fade show active" id="tab-scanner">
+                        <div class="mb-3">
+                            <label class="form-label small fw-bold">Pilih Perangkat Scanner (WIA):</label>
+                            <select class="form-select form-select-sm font-mono" id="cfgScannerDevice">
+                                <option value="auto">Deteksi Otomatis (Perangkat Pertama yang Terhubung)</option>
+                            </select>
+                            <div class="form-text small">Mendukung semua merk scanner: Epson, Canon, HP, Brother, Fujitsu, dll.</div>
+                        </div>
+
+                        <div class="row g-2 mb-3">
+                            <div class="col-sm-6">
+                                <label class="form-label small fw-bold">Sumber Kertas Default:</label>
+                                <select class="form-select form-select-sm font-mono" id="cfgScannerSource">
+                                    <option value="ADF">ADF (Feeder Lembar Dokumen)</option>
+                                    <option value="Flatbed">Flatbed (Kaca Datar)</option>
+                                </select>
+                            </div>
+                            <div class="col-sm-6">
+                                <label class="form-label small fw-bold">Resolusi Scan (DPI):</label>
+                                <select class="form-select form-select-sm font-mono" id="cfgScannerDpi">
+                                    <option value="150">150 DPI (Cepat)</option>
+                                    <option value="200" selected>200 DPI (Standar & Rekomendasi)</option>
+                                    <option value="300">300 DPI (Detail Tinggi)</option>
+                                </select>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Tab Portal -->
+                    <div class="tab-pane fade" id="tab-portal">
+                        <div class="mb-3">
+                            <label class="form-label small fw-bold">Alamat Portal TKA:</label>
+                            <input type="text" class="form-control form-control-sm font-mono" id="cfgPortalUrl" value="https://tka.kemendikdasmen.go.id">
+                        </div>
+                        <div class="row g-2 mb-3">
+                            <div class="col-sm-6">
+                                <label class="form-label small fw-bold">Username / Kode Sekolah:</label>
+                                <input type="text" class="form-control form-control-sm font-mono" id="cfgPortalUser">
+                            </div>
+                            <div class="col-sm-6">
+                                <label class="form-label small fw-bold">Password Portal:</label>
+                                <input type="password" class="form-control form-control-sm font-mono" id="cfgPortalPass">
+                            </div>
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label small fw-bold">Jenjang / Kode Ujian:</label>
+                            <select class="form-select form-select-sm font-mono" id="cfgPortalKdUjian">
+                                <option value="U">U - SMA / MA / SMK</option>
+                                <option value="SMP">SMP / MTs</option>
+                                <option value="SD">SD / MI</option>
+                            </select>
+                        </div>
+                        <div class="text-end">
+                            <button type="button" class="btn btn-outline-secondary btn-sm" onclick="testPortalSettings()">
+                                Uji Koneksi Portal
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- Tab Rules -->
+                    <div class="tab-pane fade" id="tab-rules">
+                        <div class="mb-3">
+                            <label class="form-label small fw-bold">Pemetaan Tanggal Ujian ke Hari (Format JSON):</label>
+                            <textarea class="form-control form-control-sm font-mono" id="cfgDateDayMap" rows="4">{"26": 1, "27": 2, "28": 3, "29": 4}</textarea>
+                            <div class="form-text small">Contoh: Tanggal 26 = Hari 1, Tanggal 27 = Hari 2.</div>
+                        </div>
+
+                        <div class="mb-3">
+                            <label class="form-label small fw-bold">Prefix ID Server:</label>
+                            <input type="text" class="form-control form-control-sm font-mono" id="cfgServerPrefix" value="" placeholder="misal: U01234567">
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer py-2 px-4 bg-light">
+                <button type="button" class="btn btn-outline-secondary btn-sm" data-bs-dismiss="modal">Tutup</button>
+                <button type="button" class="btn btn-primary btn-sm px-3" onclick="saveAppSettings()">Simpan Pengaturan</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Scripts -->
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+<script>
+    let currentQueue = [];
+    let allBapSlots = [];
+    let allDhSlots = [];
+    let activeItem = null;
+    let uploadPollTimer = null;
+    let activeTypeFilter = 'ALL';
+
+    document.addEventListener("DOMContentLoaded", () => {
+        refreshStatus();
+        loadQueue();
+        loadSlots();
+        loadHistory();
+        checkRunningUploadOnLoad();
+        setInterval(refreshStatus, 8000);
+    });
+
+    function toggleSidebar() {
+        document.getElementById("sidebar").classList.toggle("show");
+    }
+
+    function switchNav(viewId) {
+        document.querySelectorAll(".nav-sidebar-link").forEach(el => el.classList.remove("active"));
+        document.querySelectorAll(".content-view").forEach(el => el.style.display = "none");
+
+        const targetView = document.getElementById(`view-${viewId}`);
+        if (targetView) targetView.style.display = "block";
+
+        const titleMap = {
+            'queue': 'Antrean Berkas',
+            'matrix': 'Jadwal Sesi Portal (96 Sesi)',
+            'history': 'Riwayat Unggah',
+            'upload': 'Impor Manual'
+        };
+        document.getElementById("currentViewTitle").innerText = titleMap[viewId] || 'Dashboard';
+
+        const clickedLink = event ? event.currentTarget : null;
+        if (clickedLink) clickedLink.classList.add("active");
+    }
+
+    async function checkRunningUploadOnLoad() {
+        try {
+            const res = await fetch("/api/upload/status");
+            const data = await res.json();
+            if (data.is_running) {
+                document.getElementById("uploadProgressCard").style.display = "block";
+                startUploadPolling();
+            }
+        } catch (err) {}
+    }
+
+    async function refreshStatus() {
+        try {
+            const res = await fetch("/api/status");
+            const data = await res.json();
+
+            // Hardware Telemetry
+            const sc = document.getElementById("sideScannerStatus");
+            if (data.scanner && data.scanner.online) {
+                const devName = (data.scanner.device && data.scanner.device.name) ? data.scanner.device.name : 'Tersambung';
+                sc.innerHTML = `<span class="status-dot"></span> <span id="scannerDeviceName">${devName}</span>`;
+            } else {
+                sc.innerHTML = `<span class="status-dot offline"></span> Tidak Terhubung`;
+            }
+
+            // Stats
+            document.getElementById("statTotalSlots").innerText = data.total_slots || 96;
+            document.getElementById("statBapUploaded").innerText = data.bap_uploaded || 0;
+            document.getElementById("statDhUploaded").innerText = data.dh_uploaded || 0;
+            document.getElementById("statReadyQueue").innerText = data.ready_to_upload || 0;
+            document.getElementById("readyCountBtn").innerText = data.ready_to_upload || 0;
+            document.getElementById("statQueueTotal").innerText = `Antrean: ${data.queue_count || 0}`;
+
+            const total = data.total_slots || 96;
+            document.getElementById("pctBap").innerText = `${data.bap_uploaded || 0}/${total}`;
+            document.getElementById("pctDh").innerText = `${data.dh_uploaded || 0}/${total}`;
+
+            if (data.username) {
+                document.getElementById("sidebarUserCode").innerText = `${data.username} \u2022 Proktor Sekolah`;
+                document.getElementById("topUserDisplay").innerText = data.username;
+            }
+        } catch (err) {
+            console.error("Status check error:", err);
+        }
+    }
+
+    async function loadQueue() {
+        try {
+            const res = await fetch("/api/queue");
+            const data = await res.json();
+            currentQueue = data.queue || [];
+            document.getElementById("sideBadgeQueue").innerText = currentQueue.length;
+            renderQueueTable();
+        } catch (err) {
+            console.error("Queue load error:", err);
+        }
+    }
+
+    async function loadSlots() {
+        try {
+            const [r1, r2] = await Promise.all([
+                fetch("/api/portal/slots?type=bap"),
+                fetch("/api/portal/slots?type=dh")
+            ]);
+            const d1 = await r1.json();
+            const d2 = await r2.json();
+            allBapSlots = d1.slots || [];
+            allDhSlots = d2.slots || [];
+            renderMatrixTable();
+        } catch (err) {
+            console.error("Slots load error:", err);
+        }
+    }
+
+    function filterQueueType(type, btn) {
+        activeTypeFilter = type;
+        if (btn) {
+            btn.parentElement.querySelectorAll(".btn").forEach(b => b.classList.remove("active"));
+            btn.classList.add("active");
+        }
+        renderQueueTable();
+    }
+
+    function renderQueueTable() {
+        const tbody = document.getElementById("queueTableBody");
+        
+        const bapCount = currentQueue.filter(q => q.doc_type === "BAP").length;
+        const dhCount = currentQueue.filter(q => q.doc_type === "DH").length;
+        document.getElementById("qCountAll").innerText = currentQueue.length;
+        document.getElementById("qCountBap").innerText = bapCount;
+        document.getElementById("qCountDh").innerText = dhCount;
+
+        const filtered = activeTypeFilter === "ALL" 
+            ? currentQueue 
+            : currentQueue.filter(q => q.doc_type === activeTypeFilter);
+
+        if (filtered.length === 0) {
+            tbody.innerHTML = `
+                <tr>
+                    <td colspan="7" class="text-center py-4 text-muted">
+                        Tidak ada berkas di antrean.
+                    </td>
+                </tr>`;
+            return;
+        }
+
+        let html = "";
+        filtered.forEach((item) => {
+            const docBadge = item.doc_type === "BAP" 
+                ? `<span class="badge-type-bap">BAP</span>` 
+                : `<span class="badge-type-dh">DH</span>`;
+
+            let statusBadge = "";
+            let actionBtn = "";
+            if (item.status === "READY") {
+                statusBadge = `<span class="badge-status-ready">Siap</span>`;
+                actionBtn = `<button class="btn btn-outline-success" onclick="uploadSingle('${item.id}')" title="Unggah"><i class="fa-solid fa-arrow-up-from-bracket"></i></button>`;
+            } else if (item.status === "UPLOADED") {
+                statusBadge = `<span class="badge-status-uploaded">Terunggah</span>`;
+                actionBtn = `<button class="btn btn-outline-secondary" disabled title="Sudah Terunggah"><i class="fa-solid fa-check"></i></button>`;
+            } else if (item.status === "FAILED") {
+                statusBadge = `<span class="badge-status-failed" title="${item.upload_msg || ''}">Gagal</span>`;
+                actionBtn = `<button class="btn btn-outline-danger" onclick="uploadSingle('${item.id}')" title="Coba Lagi"><i class="fa-solid fa-rotate-right"></i></button>`;
+            } else if (item.status === "DUPLICATE_SKIPPED") {
+                statusBadge = `<span class="badge-status-duplicate" title="${item.match_reason || 'Rangkap 2 terdeteksi'}">Rangkap 2 (Dilewati)</span>`;
+                actionBtn = `<button class="btn btn-outline-warning" onclick="forceReady('${item.id}')" title="Gunakan Berkas Ini (Gantikan Berkas Utama)"><i class="fa-solid fa-repeat"></i> Pakai Ini</button>`;
+            } else {
+                statusBadge = `<span class="badge-status-ready" style="background:#fef3c7; color:#92400e; border-color:#fde68a;">Review</span>`;
+                actionBtn = `<button class="btn btn-outline-primary" onclick="openPreview('${item.id}')" title="Periksa"><i class="fa-solid fa-pen-to-square"></i></button>`;
+            }
+
+            const matchedInfo = item.matched_slot 
+                ? `<div class="fw-semibold">Hari ${item.matched_slot.hari} (Sesi ${item.matched_slot.sesi})</div><small class="text-muted font-mono">${item.matched_slot.nm_ruang} &bull; ${item.matched_slot.keterangan || item.matched_slot.mp || '-'}</small>`
+                : `<span class="text-danger small">Belum terpetakan</span>`;
+
+            const scoreColor = item.match_score >= 80 ? "bg-success" : (item.match_score >= 50 ? "bg-warning" : "bg-danger");
+            const progressHtml = `
+                <div class="progress" style="height: 4px; border-radius: 1px;">
+                    <div class="progress-bar ${scoreColor}" style="width: ${Math.min(item.match_score, 100)}%"></div>
+                </div>
+                <small class="text-secondary font-mono" style="font-size: 0.725rem;">${item.match_score}%</small>`;
+
+            html += `
+                <tr class="${item.status === 'DUPLICATE_SKIPPED' ? 'opacity-75 bg-light' : ''}">
+                    <td class="text-center">
+                        <img src="/preview/${encodeURIComponent(item.file_path)}" class="doc-thumb" onclick="openPreview('${item.id}')" title="Inspeksi">
+                    </td>
+                    <td>
+                        <div class="fw-semibold text-truncate font-mono" style="max-width: 150px;" title="${item.file_name}">${item.file_name}</div>
+                        <small class="text-muted font-mono">${item.tanggal || '-'}</small>
+                    </td>
+                    <td>
+                        <div class="mb-1">${docBadge}</div>
+                        <small class="text-dark font-mono">H${item.hari || '-'} S${item.sesi || '-'} ${item.ruang || '-'}</small>
+                    </td>
+                    <td>${matchedInfo}</td>
+                    <td>${progressHtml}</td>
+                    <td>${statusBadge}</td>
+                    <td class="text-end pe-3">
+                        <div class="btn-group btn-group-sm">
+                            <button class="btn btn-outline-secondary" onclick="openPreview('${item.id}')" title="Inspeksi">
+                                <i class="fa-solid fa-eye"></i>
+                            </button>
+                            ${actionBtn}
+                        </div>
+                    </td>
+                </tr>`;
+        });
+        tbody.innerHTML = html;
+    }
+
+    function renderMatrixTable() {
+        const tbody = document.getElementById("matrixTableBody");
+        if (allBapSlots.length === 0) {
+            tbody.innerHTML = `<tr><td colspan="8" class="text-center py-4 text-muted">Belum ada data dari portal TKA.</td></tr>`;
+            return;
+        }
+
+        let html = "";
+        allBapSlots.forEach((bap, idx) => {
+            const dh = allDhSlots[idx] || {};
+            const bapDone = Boolean(bap.filename || (bap.status && bap.status.includes("check")));
+            const dhDone = Boolean(dh.filename_1 || (dh.status && dh.status.includes("check")));
+
+            const bapBadge = bapDone 
+                ? `<span class="text-success font-mono small">Sudah</span>` 
+                : `<span class="text-muted font-mono small">-</span>`;
+
+            const dhBadge = dhDone 
+                ? `<span class="text-success font-mono small">Sudah</span>` 
+                : `<span class="text-muted font-mono small">-</span>`;
+
+            html += `
+                <tr>
+                    <td class="text-center font-mono">${bap.gelombang || '1'}</td>
+                    <td class="font-mono">Hari ${bap.hari}</td>
+                    <td class="font-mono">Sesi ${bap.sesi}</td>
+                    <td class="fw-semibold">${bap.nm_ruang}</td>
+                    <td>${bap.keterangan || dh.mp || '-'}</td>
+                    <td><small class="text-muted font-mono">${bap.kd_server}</small></td>
+                    <td class="text-center">${bapBadge}</td>
+                    <td class="text-center">${dhBadge}</td>
+                </tr>`;
+        });
+        tbody.innerHTML = html;
+    }
+
+    function filterMatrixTable() {
+        const q = document.getElementById("filterMatrix").value.toLowerCase();
+        const rows = document.querySelectorAll("#matrixTableBody tr");
+        rows.forEach(r => {
+            r.style.display = r.innerText.toLowerCase().includes(q) ? "" : "none";
+        });
+    }
+
+    async function loadHistory() {
+        try {
+            const res = await fetch("/api/logs/history");
+            const data = await res.json();
+            const history = data.history || [];
+            document.getElementById("sideBadgeHistory").innerText = history.length;
+
+            const tbody = document.getElementById("historyTableBody");
+            if (history.length === 0) {
+                tbody.innerHTML = `<tr><td colspan="9" class="text-center py-4 text-muted">Belum ada riwayat unggahan.</td></tr>`;
+                return;
+            }
+
+            let html = "";
+            history.forEach((h, idx) => {
+                const badgeType = h.doc_type === "BAP" 
+                    ? `<span class="badge-type-bap">BAP</span>` 
+                    : `<span class="badge-type-dh">DH</span>`;
+                
+                const badgeStatus = h.status === "SUKSES" 
+                    ? `<span class="text-success font-mono small">SUKSES</span>` 
+                    : `<span class="text-danger font-mono small">GAGAL</span>`;
+
+                html += `
+                    <tr>
+                        <td class="text-center text-muted font-mono">${idx + 1}</td>
+                        <td class="font-mono small text-nowrap">${h.timestamp || '-'}</td>
+                        <td>${badgeType}</td>
+                        <td class="font-mono small">${h.hari || '-'} - ${h.sesi || '-'}</td>
+                        <td>${h.ruang || '-'}</td>
+                        <td>
+                            <div>${h.mapel || '-'}</div>
+                            <small class="text-muted font-mono">${h.server || '-'}</small>
+                        </td>
+                        <td><small class="text-truncate d-inline-block font-mono" style="max-width: 140px;" title="${h.file_name}">${h.file_name}</small></td>
+                        <td class="text-center">${badgeStatus}</td>
+                        <td><small class="text-secondary font-mono">${h.portal_msg || '-'}</small></td>
+                    </tr>`;
+            });
+            tbody.innerHTML = html;
+        } catch (err) {
+            console.error("Failed to load history:", err);
+        }
+    }
+
+    async function triggerScan(source) {
+        Swal.fire({
+            title: `Memindai dari ${source}...`,
+            text: 'Memproses pemindaian... Harap tunggu.',
+            allowOutsideClick: false,
+            didOpen: () => Swal.showLoading()
+        });
+
+        try {
+            const res = await fetch("/api/scan", {
+                method: "POST",
+                headers: {"Content-Type": "application/json"},
+                body: JSON.stringify({source: source})
+            });
+            const data = await res.json();
+            if (data.success) {
+                Swal.fire('Selesai', `Berhasil memindai ${data.count} halaman.`, 'success');
+                loadQueue();
+                refreshStatus();
+            } else {
+                Swal.fire('Scanner', data.msg || 'Gagal memindai.', 'warning');
+            }
+        } catch (err) {
+            Swal.fire('Error', 'Gagal memindai: ' + err, 'error');
+        }
+    }
+
+    async function importSampleFolder(folderPath) {
+        Swal.fire({
+            title: 'Menganalisis Berkas...',
+            text: 'Membaca dokumen dan mencocokkan jadwal...',
+            allowOutsideClick: false,
+            didOpen: () => Swal.showLoading()
+        });
+
+        try {
+            const res = await fetch("/api/import_folder", {
+                method: "POST",
+                headers: {"Content-Type": "application/json"},
+                body: JSON.stringify({folder_path: folderPath})
+            });
+            const data = await res.json();
+            if (data.success) {
+                Swal.fire('Impor Sukses', `Ditemukan ${data.total_found} berkas, berhasil dianalisis: ${data.imported}.`, 'success');
+                loadQueue();
+                refreshStatus();
+            } else {
+                Swal.fire('Error', data.msg, 'error');
+            }
+        } catch (err) {
+            Swal.fire('Error', 'Gagal impor: ' + err, 'error');
+        }
+    }
+
+    async function clearQueue() {
+        const conf = await Swal.fire({
+            title: 'Kosongkan Antrean?',
+            text: 'Daftar berkas di antrean saat ini akan dibersihkan.',
+            icon: 'question',
+            showCancelButton: true,
+            confirmButtonText: 'Ya, Kosongkan',
+            cancelButtonText: 'Batal'
+        });
+        if (conf.isConfirmed) {
+            await fetch("/api/queue/clear", {method: "POST"});
+            loadQueue();
+            refreshStatus();
+        }
+    }
+
+    async function syncPortalData() {
+        Swal.fire({
+            title: 'Sinkronisasi Portal TKA...',
+            text: 'Menghubungkan ke https://tka.kemendikdasmen.go.id...',
+            allowOutsideClick: false,
+            didOpen: () => Swal.showLoading()
+        });
+        try {
+            const res = await fetch("/api/sync", {method: "POST"});
+            const data = await res.json();
+            if (data.success) {
+                Swal.fire('Sinkronisasi Berhasil!', data.msg, 'success');
+                loadSlots();
+                refreshStatus();
+            } else {
+                Swal.fire('Gagal Sinkronisasi', data.msg || 'Tidak dapat terhubung.', 'error');
+            }
+        } catch (err) {
+            Swal.fire('Error', '' + err, 'error');
+        }
+    }
+
+    async function forceReady(queueId) {
+        try {
+            const res = await fetch("/api/queue/force_ready", {
+                method: "POST",
+                headers: {"Content-Type": "application/json"},
+                body: JSON.stringify({queue_id: queueId})
+            });
+            const data = await res.json();
+            if (data.success) {
+                Swal.fire({
+                    title: 'Rangkap Diaktifkan',
+                    text: data.msg,
+                    icon: 'success',
+                    timer: 1500,
+                    showConfirmButton: false
+                });
+                await loadQueue();
+                await checkStatus();
+            } else {
+                Swal.fire('Gagal', data.msg, 'error');
+            }
+        } catch (err) {
+            Swal.fire('Error', 'Gagal mengaktifkan berkas: ' + err, 'error');
+        }
+    }
+
+    async function uploadSingle(queueId) {
+        Swal.fire({
+            title: 'Mengunggah Berkas...',
+            text: 'Mengirimkan dokumen ke server TKA...',
+            didOpen: () => Swal.showLoading()
+        });
+        try {
+            const res = await fetch("/api/upload_slot", {
+                method: "POST",
+                headers: {"Content-Type": "application/json"},
+                body: JSON.stringify({queue_id: queueId})
+            });
+            const data = await res.json();
+            if (data.success) {
+                Swal.fire('Berhasil!', data.msg || 'Data sudah diupload ke portal.', 'success');
+                loadQueue();
+                loadSlots();
+                loadHistory();
+                refreshStatus();
+            } else {
+                Swal.fire('Gagal Unggah', data.msg || 'Server menolak berkas.', 'error');
+            }
+        } catch (err) {
+            Swal.fire('Error', '' + err, 'error');
+        }
+    }
+
+    async function uploadAllReady() {
+        const readyItems = currentQueue.filter(q => q.status === "READY" || q.status === "FAILED");
+        if (readyItems.length === 0) {
+            Swal.fire('Informasi', 'Tidak ada berkas di antrean yang perlu diunggah.', 'info');
+            return;
+        }
+
+        const delayRange = document.getElementById("selectDelay").value.split("-");
+        const dMin = parseFloat(delayRange[0]) || 3;
+        const dMax = parseFloat(delayRange[1]) || 5;
+
+        const conf = await Swal.fire({
+            title: `Mulai Unggah ${readyItems.length} Berkas?`,
+            text: `Unggah antrean dengan jeda ${dMin}-${dMax} detik antar-berkas.`,
+            icon: 'question',
+            showCancelButton: true,
+            confirmButtonText: 'Mulai Unggah',
+            cancelButtonText: 'Batal'
+        });
+
+        if (conf.isConfirmed) {
+            try {
+                const res = await fetch("/api/upload/start", {
+                    method: "POST",
+                    headers: {"Content-Type": "application/json"},
+                    body: JSON.stringify({delay_min: dMin, delay_max: dMax})
+                });
+                const data = await res.json();
+                if (data.success) {
+                    document.getElementById("uploadProgressCard").style.display = "block";
+                    startUploadPolling();
+                } else {
+                    Swal.fire('Peringatan', data.msg, 'warning');
+                }
+            } catch (err) {
+                Swal.fire('Error', '' + err, 'error');
+            }
+        }
+    }
+
+    function startUploadPolling() {
+        if (uploadPollTimer) clearInterval(uploadPollTimer);
+        uploadPollTimer = setInterval(pollUploadProgress, 750);
+        pollUploadProgress();
+    }
+
+    async function pollUploadProgress() {
+        try {
+            const res = await fetch("/api/upload/status");
+            const data = await res.json();
+
+            const card = document.getElementById("uploadProgressCard");
+            const pBar = document.getElementById("uploadProgressBar");
+            const statusTxt = document.getElementById("uploadCurrentStatus");
+            const targetSlot = document.getElementById("uploadTargetSlot");
+            const badgeSucc = document.getElementById("statBadgeSuccess");
+            const badgeFail = document.getElementById("statBadgeFailed");
+            const badgeRem = document.getElementById("statBadgeRemaining");
+            const btnPause = document.getElementById("btnPauseUpload");
+            const btnResume = document.getElementById("btnResumeUpload");
+            const spinner = document.getElementById("uploadSpinner");
+
+            if (!data.is_running && data.total === 0) {
+                card.style.display = "none";
+                if (uploadPollTimer) clearInterval(uploadPollTimer);
+                return;
+            }
+
+            card.style.display = "block";
+
+            // Progress Bar
+            pBar.style.width = `${data.progress_percent}%`;
+            pBar.innerText = `${data.progress_percent}% (${data.current_index}/${data.total})`;
+
+            // Status Texts
+            statusTxt.innerHTML = `${data.status_text}`;
+            targetSlot.innerText = data.current_slot || '';
+
+            // Stats Badges
+            badgeSucc.innerText = `Sukses: ${data.success_count}`;
+            badgeFail.innerText = `Gagal: ${data.fail_count}`;
+            const remaining = Math.max(0, data.total - data.current_index);
+            badgeRem.innerText = `Sisa: ${remaining}`;
+
+            // Pause / Resume buttons
+            if (data.is_paused) {
+                btnPause.classList.add("d-none");
+                btnResume.classList.remove("d-none");
+                spinner.classList.replace("text-primary", "text-warning");
+            } else {
+                btnPause.classList.remove("d-none");
+                btnResume.classList.add("d-none");
+                spinner.classList.replace("text-warning", "text-primary");
+            }
+
+            // Render Logs
+            if (data.logs && data.logs.length) {
+                document.getElementById("logCount").innerText = data.logs.length;
+                let logHtml = "";
+                data.logs.slice(0, 15).forEach(l => {
+                    const icon = l.status === "SUCCESS" 
+                        ? `<span class="text-success">[SUKSES]</span>`
+                        : `<span class="text-danger">[GAGAL]</span>`;
+                    logHtml += `<div><span class="text-secondary">${l.time}</span> ${icon} <b>${l.file}</b>: ${l.msg}</div>`;
+                });
+                document.getElementById("uploadLogTerminal").innerHTML = logHtml;
+            }
+
+            // Check completion
+            if (!data.is_running && data.total > 0) {
+                clearInterval(uploadPollTimer);
+                uploadPollTimer = null;
+                spinner.style.display = "none";
+
+                loadQueue();
+                loadSlots();
+                loadHistory();
+                refreshStatus();
+
+                Swal.fire({
+                    title: 'Unggah Selesai',
+                    text: `Berhasil: ${data.success_count}, Gagal: ${data.fail_count} dari ${data.total} berkas.`,
+                    icon: data.fail_count === 0 ? 'success' : 'warning'
+                });
+            } else {
+                spinner.style.display = "inline-block";
+            }
+        } catch (err) {
+            console.error("Error polling upload status:", err);
+        }
+    }
+
+    async function pauseUpload() {
+        await fetch("/api/upload/pause", {method: "POST"});
+        pollUploadProgress();
+    }
+
+    async function resumeUpload() {
+        await fetch("/api/upload/resume", {method: "POST"});
+        pollUploadProgress();
+    }
+
+    async function stopUpload() {
+        const conf = await Swal.fire({
+            title: 'Hentikan Proses Unggah?',
+            text: 'Berkas yang belum diunggah akan tetap tersimpan di antrean.',
+            icon: 'warning',
+            showCancelButton: true,
+            confirmButtonText: 'Ya, Hentikan',
+            cancelButtonText: 'Batal'
+        });
+        if (conf.isConfirmed) {
+            await fetch("/api/upload/stop", {method: "POST"});
+            pollUploadProgress();
+        }
+    }
+
+    function openPreview(queueId) {
+        activeItem = currentQueue.find(q => q.id === queueId);
+        if (!activeItem) return;
+
+        document.getElementById("previewImage").src = `/preview/${encodeURIComponent(activeItem.file_path)}`;
+        document.getElementById("mDocType").innerText = activeItem.doc_type === "BAP" ? "Berita Acara (BAP)" : "Daftar Hadir (DH)";
+        document.getElementById("mHariTgl").innerText = `Hari ${activeItem.hari || '-'} (${activeItem.tanggal || '-'})`;
+        document.getElementById("mSesi").innerText = `Sesi ${activeItem.sesi || '-'}`;
+        document.getElementById("mRuang").innerText = activeItem.ruang || '-';
+        document.getElementById("mServer").innerText = activeItem.kd_server || '-';
+        document.getElementById("mMapel").innerText = activeItem.mapel || '-';
+
+        if (activeItem.matched_slot) {
+            document.getElementById("mMatchedDetails").innerHTML = `
+                <div class="text-success fw-bold"><i class="fa-solid fa-circle-check"></i> Cocok: Hari ${activeItem.matched_slot.hari} - Sesi ${activeItem.matched_slot.sesi}</div>
+                <div><b>${activeItem.matched_slot.nm_ruang}</b> (${activeItem.matched_slot.keterangan || activeItem.matched_slot.mp})</div>
+                <div class="small text-muted font-mono">${activeItem.matched_slot.kd_server}</div>
+                <div class="small text-secondary mt-1">Alasan: ${activeItem.match_reason}</div>
+            `;
+        } else {
+            document.getElementById("mMatchedDetails").innerHTML = `<span class="text-danger">Belum ada jadwal yang cocok otomatis. Silakan pilih di bawah.</span>`;
+        }
+
+        const slots = activeItem.doc_type === "BAP" ? allBapSlots : allDhSlots;
+        const sel = document.getElementById("slotSelector");
+        sel.innerHTML = `<option value="">Pilih Jadwal Pengganti...</option>`;
+        slots.forEach((s, idx) => {
+            sel.innerHTML += `<option value="${idx}">Hari ${s.hari} | Sesi ${s.sesi} | ${s.nm_ruang} | ${s.keterangan || s.mp}</option>`;
+        });
+
+        new bootstrap.Modal(document.getElementById("previewModal")).show();
+    }
+
+    async function saveManualSlot() {
+        const sel = document.getElementById("slotSelector");
+        if (sel.value === "") return;
+        const idx = parseInt(sel.value);
+
+        try {
+            const res = await fetch("/api/queue/update_match", {
+                method: "POST",
+                headers: {"Content-Type": "application/json"},
+                body: JSON.stringify({queue_id: activeItem.id, slot_index: idx})
+            });
+            const data = await res.json();
+            if (data.success) {
+                Swal.fire('Tersimpan', 'Pilihan slot jadwal diperbarui.', 'success');
+                bootstrap.Modal.getInstance(document.getElementById("previewModal")).hide();
+                loadQueue();
+            }
+        } catch (err) {
+            Swal.fire('Error', '' + err, 'error');
+        }
+    }
+
+    async function handleFileSelect(evt) {
+        const files = evt.target.files;
+        if (!files.length) return;
+
+        Swal.fire({
+            title: 'Mengunggah & Menganalisis Berkas...',
+            didOpen: () => Swal.showLoading()
+        });
+
+        for (let f of files) {
+            const fd = new FormData();
+            fd.append("file", f);
+            await fetch("/api/upload_local", {method: "POST", body: fd});
+        }
+
+        Swal.fire('Selesai', `Berhasil memproses ${files.length} berkas.`, 'success');
+        loadQueue();
+        refreshStatus();
+    }
+
+    async function openScannerSettings() {
+        try {
+            const res = await fetch("/api/settings");
+            const data = await res.json();
+            const s = data.settings || {};
+            const sc = s.scanner || {};
+            const p = s.portal || {};
+            const r = s.ocr_rules || {};
+
+            const devSelect = document.getElementById("cfgScannerDevice");
+            devSelect.innerHTML = `<option value="auto">Deteksi Otomatis (Perangkat Pertama yang Terhubung)</option>`;
+            (data.available_scanners || []).forEach(d => {
+                const opt = document.createElement("option");
+                opt.value = d.id;
+                opt.text = `${d.name} (${d.id.split('\\').pop()})`;
+                if (sc.device_id === d.id) opt.selected = true;
+                devSelect.appendChild(opt);
+            });
+
+            document.getElementById("cfgScannerSource").value = sc.default_source || "ADF";
+            document.getElementById("cfgScannerDpi").value = sc.dpi || 200;
+
+            document.getElementById("cfgPortalUrl").value = p.base_url || "https://tka.kemendikdasmen.go.id";
+            document.getElementById("cfgPortalUser").value = p.username || "";
+            document.getElementById("cfgPortalPass").value = p.password || "";
+            document.getElementById("cfgPortalKdUjian").value = p.kd_ujian || "U";
+
+            document.getElementById("cfgDateDayMap").value = JSON.stringify(r.date_day_map || {"26": 1, "27": 2, "28": 3, "29": 4});
+            document.getElementById("cfgServerPrefix").value = r.server_prefix || "";
+
+            new bootstrap.Modal(document.getElementById("settingsModal")).show();
+        } catch (err) {
+            Swal.fire('Error', 'Gagal memuat pengaturan: ' + err, 'error');
+        }
+    }
+
+    async function saveAppSettings() {
+        let dateMap = {};
+        try {
+            dateMap = JSON.parse(document.getElementById("cfgDateDayMap").value);
+        } catch (e) {
+            Swal.fire('Format Salah', 'Format JSON Pemetaan Tanggal tidak valid: ' + e, 'warning');
+            return;
+        }
+
+        const payload = {
+            scanner: {
+                device_id: document.getElementById("cfgScannerDevice").value,
+                default_source: document.getElementById("cfgScannerSource").value,
+                dpi: parseInt(document.getElementById("cfgScannerDpi").value)
+            },
+            portal: {
+                base_url: document.getElementById("cfgPortalUrl").value.trim(),
+                username: document.getElementById("cfgPortalUser").value.trim(),
+                password: document.getElementById("cfgPortalPass").value.trim(),
+                kd_ujian: document.getElementById("cfgPortalKdUjian").value
+            },
+            ocr_rules: {
+                date_day_map: dateMap,
+                server_prefix: document.getElementById("cfgServerPrefix").value.trim()
+            }
+        };
+
+        try {
+            const res = await fetch("/api/settings", {
+                method: "POST",
+                headers: {"Content-Type": "application/json"},
+                body: JSON.stringify(payload)
+            });
+            const data = await res.json();
+            if (data.success) {
+                Swal.fire('Tersimpan', 'Pengaturan scanner & portal berhasil diperbarui.', 'success');
+                bootstrap.Modal.getInstance(document.getElementById("settingsModal")).hide();
+                refreshStatus();
+            } else {
+                Swal.fire('Gagal', 'Gagal menyimpan pengaturan.', 'error');
+            }
+        } catch (err) {
+            Swal.fire('Error', '' + err, 'error');
+        }
+    }
+
+    async function testPortalSettings() {
+        Swal.fire({
+            title: 'Menguji Koneksi...',
+            didOpen: () => Swal.showLoading()
+        });
+        try {
+            const res = await fetch("/api/portal/test", {
+                method: "POST",
+                headers: {"Content-Type": "application/json"},
+                body: JSON.stringify({
+                    base_url: document.getElementById("cfgPortalUrl").value.trim(),
+                    username: document.getElementById("cfgPortalUser").value.trim(),
+                    password: document.getElementById("cfgPortalPass").value.trim()
+                })
+            });
+            const data = await res.json();
+            Swal.fire(data.success ? 'Sukses' : 'Gagal', data.msg, data.success ? 'success' : 'error');
+        } catch (err) {
+            Swal.fire('Error', '' + err, 'error');
+        }
+    }
+</script>
+</body>
+</html>

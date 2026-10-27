@@ -1,0 +1,40 @@
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
+
+# PyInstaller / Packaging / Build
+build/
+dist/
+*.spec.bak
+*.zip
+*.tar.gz
+
+# User Data & Storage (Protect school exam documents & student privacy)
+DokumenTKA/
+inbox/*
+!inbox/.gitkeep
+processed/*
+!processed/.gitkeep
+temp_uploads/*
+!temp_uploads/.gitkeep
+logs/*.csv
+logs/*.jsonl
+!logs/.gitkeep
+
+# Local Credentials & Secrets
+.env
+settings.json
+!settings.example.json
+
+# Windows Shortcuts & OS Temp
+*.lnk
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+.DS_Store
+
+# Editor & AI Tooling
+.vscode/
+.idea/
+.gemini/
