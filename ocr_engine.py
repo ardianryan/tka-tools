@@ -199,18 +199,21 @@ def parse_tka_document(ocr_lines: list, full_text: str, header_lines: list = Non
                 if doc["sesi"]:
                     break
 
-    # 6. Extract Student Participants Fingerprint
+    # 6. Extract Student Participants Fingerprint & Sesi Range Verification
     pats = sorted(list(set(re.findall(r'0005\d{4,5}', full_text))))
     doc["participants"] = pats
 
-    # F. Fallback Sesi based on student roll number batch if header cell was faint
-    if not doc["sesi"] and pats and doc["lab_num"]:
+    # Verifikasi Sesi berdasarkan Rentang Nomor Urut Siswa (80 siswa per sesi, 4 lab @ 20 siswa)
+    if pats:
         first_num = re.search(r'0005(\d{4})', pats[0])
         if first_num:
             idx = int(first_num.group(1))
-            lab_base = (doc["lab_num"] - 1) * 20 + 1
-            if lab_base <= idx <= lab_base + 20:
+            if 1 <= idx <= 80:
                 doc["sesi"] = 1
+            elif 81 <= idx <= 160:
+                doc["sesi"] = 2
+            elif 161 <= idx <= 240:
+                doc["sesi"] = 3
 
     # 7. Mapel determination (from Hari or text)
     if "Bahasa Indonesia" in text:

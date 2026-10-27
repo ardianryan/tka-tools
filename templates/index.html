@@ -748,41 +748,57 @@
             </div>
             <div class="modal-body p-0">
                 <div class="row g-0">
-                    <div class="col-lg-7 bg-dark d-flex align-items-center justify-content-center p-3" style="max-height: 75vh; overflow: auto;">
-                        <img id="previewImage" src="" class="img-fluid rounded shadow" style="max-height: 70vh;">
+                    <div class="col-lg-7 bg-dark d-flex align-items-center justify-content-center p-3" style="min-height: 520px; max-height: 78vh; overflow: auto;">
+                        <img id="previewImage" src="" class="img-fluid rounded shadow" style="max-height: 72vh; object-fit: contain;">
                     </div>
-                    <div class="col-lg-5 p-4 d-flex flex-direction-column" style="max-height: 75vh; overflow-y: auto;">
-                        <div class="mb-3">
-                            <span class="text-secondary small fw-semibold text-uppercase font-mono">Ekstraksi Mesin OCR</span>
-                            <table class="table table-sm table-borderless mt-2 mb-0 small">
-                                <tr><th style="width: 130px;" class="text-secondary">Tipe Berkas:</th><td id="mDocType" class="fw-bold">-</td></tr>
-                                <tr><th class="text-secondary">Hari / Tanggal:</th><td id="mHariTgl">-</td></tr>
-                                <tr><th class="text-secondary">Sesi Ujian:</th><td id="mSesi" class="fw-bold">-</td></tr>
-                                <tr><th class="text-secondary">Ruang / Lab:</th><td id="mRuang">-</td></tr>
-                                <tr><th class="text-secondary">ID Server:</th><td id="mServer" class="font-mono">-</td></tr>
-                                <tr><th class="text-secondary">Mata Pelajaran:</th><td id="mMapel">-</td></tr>
-                            </table>
-                        </div>
+                    <div class="col-lg-5 p-4 d-flex flex-column justify-content-between bg-white" style="max-height: 78vh; overflow-y: auto;">
+                        <div>
+                            <!-- Card 1: Ekstraksi OCR -->
+                            <div class="border rounded p-3 mb-3 bg-light shadow-sm">
+                                <div class="d-flex align-items-center justify-content-between mb-2 pb-1 border-bottom">
+                                    <span class="text-secondary small fw-bold text-uppercase font-mono"><i class="fa-solid fa-file-lines me-1"></i> 1. Ekstraksi Mesin OCR</span>
+                                    <span id="mDocTypeBadge" class="badge-type-dh">DH</span>
+                                </div>
+                                <table class="table table-sm table-borderless mb-0 small">
+                                    <tr><th style="width: 120px;" class="text-muted fw-normal">Tipe Berkas:</th><td id="mDocType" class="fw-bold text-dark">-</td></tr>
+                                    <tr><th class="text-muted fw-normal">Hari / Tanggal:</th><td id="mHariTgl" class="fw-semibold text-dark">-</td></tr>
+                                    <tr><th class="text-muted fw-normal">Sesi Ujian:</th><td id="mSesi" class="fw-bold text-primary">-</td></tr>
+                                    <tr><th class="text-muted fw-normal">Ruang / Lab:</th><td id="mRuang" class="fw-bold text-dark">-</td></tr>
+                                    <tr><th class="text-muted fw-normal">ID Server:</th><td id="mServer" class="font-mono fw-semibold text-secondary">-</td></tr>
+                                    <tr><th class="text-muted fw-normal">Mata Pelajaran:</th><td id="mMapel" class="fw-semibold text-dark">-</td></tr>
+                                </table>
+                            </div>
 
-                        <hr class="my-3">
+                            <!-- Card 2: Pencocokan Jadwal Portal -->
+                            <div class="border rounded p-3 mb-3 bg-white shadow-sm">
+                                <div class="d-flex align-items-center justify-content-between mb-2 pb-1 border-bottom">
+                                    <span class="text-secondary small fw-bold text-uppercase font-mono"><i class="fa-solid fa-link me-1"></i> 2. Pencocokan Jadwal Portal</span>
+                                </div>
+                                <div class="p-2 bg-light rounded border small" id="mMatchedDetails">
+                                    -
+                                </div>
+                            </div>
 
-                        <div class="mb-3">
-                            <span class="text-secondary small fw-semibold text-uppercase font-mono">Pencocokan Jadwal Portal</span>
-                            <div class="p-3 bg-light rounded border mt-2 small" id="mMatchedDetails">
-                                -
+                            <!-- Card 3: Koreksi Pilihan Manual -->
+                            <div class="border rounded p-3 mb-2 bg-white shadow-sm">
+                                <label class="form-label small fw-bold text-secondary mb-1">
+                                    <i class="fa-solid fa-pen-to-square me-1"></i> 3. Koreksi Jadwal Manual (Opsional):
+                                </label>
+                                <select class="form-select form-select-sm font-mono mt-1" id="slotSelector">
+                                    <option value="">Pilih Jadwal Pengganti...</option>
+                                </select>
                             </div>
                         </div>
 
-                        <div class="mb-3">
-                            <label class="form-label small fw-bold text-secondary">Ubah Pilihan Jadwal Manual:</label>
-                            <select class="form-select form-select-sm font-mono" id="slotSelector">
-                                <option value="">Pilih Jadwal Pengganti...</option>
-                            </select>
+                        <!-- Action Footer Buttons -->
+                        <div class="d-flex align-items-center justify-content-end gap-2 pt-3 border-top mt-3">
+                            <button type="button" class="btn btn-outline-secondary btn-sm px-3" data-bs-dismiss="modal">
+                                Tutup
+                            </button>
+                            <button type="button" class="btn btn-primary btn-sm px-4 fw-semibold" onclick="saveManualSlot()">
+                                <i class="fa-solid fa-check me-1"></i> Simpan Pilihan Jadwal
+                            </button>
                         </div>
-
-                        <button class="btn btn-primary w-100 fw-semibold btn-sm py-2" onclick="saveManualSlot()">
-                            <i class="fa-solid fa-check me-1"></i> Simpan Pilihan Jadwal
-                        </button>
                     </div>
                 </div>
             </div>
@@ -1202,8 +1218,11 @@
         const isAdf = (source === "ADF");
         Swal.fire({
             title: isAdf ? 'Memindai dari Baki ADF...' : 'Memindai dari Kaca Flatbed...',
-            text: isAdf 
-                ? 'Scanner sedang menarik seluruh tumpukan lembar dari feeder ADF. Harap biarkan rol scanner menarik kertas sampai baki kosong...' 
+            html: isAdf 
+                ? `<div class="text-start small text-secondary">
+                     <p class="mb-2"><i class="fa-solid fa-spinner fa-spin text-primary me-2"></i> <b>Tahap 1:</b> Scanner sedang menarik seluruh lembar dokumen sampai baki feeder kosong dan file tersimpan di inbox...</p>
+                     <p class="mb-0 text-muted"><i class="fa-solid fa-clock me-2"></i> <b>Tahap 2:</b> Setelah scanning berhenti total, sistem otomatis menjalankan analisis OCR & pencocokan antrean secara batch.</p>
+                   </div>`
                 : 'Scanner sedang memindai dokumen di kaca... Harap tunggu.',
             allowOutsideClick: false,
             didOpen: () => Swal.showLoading()
@@ -1218,8 +1237,18 @@
             const data = await res.json();
             if (data.success) {
                 Swal.fire({
-                    title: 'Selesai Memindai',
-                    text: `Berhasil memindai ${data.count} halaman dari ${source}. Seluruh berkas telah diproses OCR dan masuk ke antrean.`,
+                    title: 'Pemindaian ADF Selesai',
+                    html: `
+                        <div class="text-start small">
+                            <div class="alert alert-success py-2 mb-2">
+                                <i class="fa-solid fa-circle-check me-1"></i> Berhasil memindai <b>${data.count} halaman</b> dan tersimpan di inbox.
+                            </div>
+                            <ul class="mb-0 text-secondary">
+                                <li><b>${data.ready_count || data.count} berkas</b> siap diunggah ke jadwal portal.</li>
+                                <li><b>${data.duplicates_count || 0} berkas rangkap 2</b> otomatis dilewati.</li>
+                            </ul>
+                        </div>
+                    `,
                     icon: 'success'
                 });
                 loadQueue();
@@ -1535,6 +1564,11 @@
 
         document.getElementById("previewImage").src = `/preview/${encodeURIComponent(activeItem.file_path)}`;
         document.getElementById("mDocType").innerText = activeItem.doc_type === "BAP" ? "Berita Acara (BAP)" : "Daftar Hadir (DH)";
+        const badgeEl = document.getElementById("mDocTypeBadge");
+        if (badgeEl) {
+            badgeEl.className = activeItem.doc_type === "BAP" ? "badge-type-bap" : "badge-type-dh";
+            badgeEl.innerText = activeItem.doc_type;
+        }
         document.getElementById("mHariTgl").innerText = `Hari ${activeItem.hari || '-'} (${activeItem.tanggal || '-'})`;
         document.getElementById("mSesi").innerText = `Sesi ${activeItem.sesi || '-'}`;
         document.getElementById("mRuang").innerText = activeItem.ruang || '-';

@@ -115,56 +115,42 @@ while ($hasMorePages -and $counter -le $maxPages) {
             break
         }
         
-        # Jeda 1.5 detik agar motor feeder ADF menarik lembar berikutnya dan sensor stabil
-        Start-Sleep -Milliseconds 1500
-        
-        # Periksa status sensor kertas feeder
-        try {
-            $status = $device.Properties.Item("Document Handling Status").Value
-            if (($status -band 1) -eq 0) {
-                # Sensor melaporkan 0 (kertas habis). Verifikasi ulang 1 detik kemudian untuk memastikan
-                Start-Sleep -Milliseconds 1200
-                $status2 = $device.Properties.Item("Document Handling Status").Value
-                if (($status2 -band 1) -eq 0) {
-                    $hasMorePages = $false
-                    break
-                }
-            }
-        } catch {}
+        # Jeda sejenak agar mekanik ADF siap menarik lembar berikutnya
+        Start-Sleep -Milliseconds 1200
         
     } catch {
         $ex = $_.Exception
         $hresult = if ($ex -and $ex.HResult) { $ex.HResult } else { 0 }
         $msg = if ($ex) { $ex.Message.ToLower() } else { "" }
         
-        # 1. 0x80210003 (-2145320957) = WIA_ERROR_PAPER_EMPTY (kertas di baki ADF habis)
+        # 1. 0x80210003 (-2145320957) = WIA_ERROR_PAPER_EMPTY (seluruh lembar di baki ADF telah habis dipindai)
         if ($hresult -eq -2145320957 -or $msg -like "*empty*" -or $msg -like "*0x80210003*") {
             $hasMorePages = $false
             break
         }
         
-        # 2. Scanner sibuk / sedang menarik lembar / warming up (0x80210006, 0x80210007, 0x80004005, dll)
+        # 2. Scanner sibuk / sedang memutar rol / menarik lembar berikutnya (0x80210006, warming up, dll)
         $isBusy = ($hresult -eq -2145320954 -or $msg -like "*busy*" -or $msg -like "*0x80210006*" -or 
-                   $msg -like "*warming*" -or $msg -like "*not ready*" -or $hresult -eq -2147467259)
+                   $msg -like "*warming*" -or $msg -like "*not ready*" -or $hresult -eq -2147467259 -or
+                   $msg -like "*device is not ready*" -or $msg -like "*80004005*")
                    
-        if ($isBusy -and $consecutiveErrors -lt 30) {
+        if ($isBusy -and $consecutiveErrors -lt 35) {
             $consecutiveErrors++
-            Start-Sleep -Seconds 2
+            Start-Sleep -Milliseconds 1500
             continue
         }
         
-        # 3. Cek apakah sensor ADF masih mendeteksi kertas
+        # 3. Jika sensor feeder masih mendeteksi kertas, beri kesempatan rol menarik
         try {
             $status = $device.Properties.Item("Document Handling Status").Value
-            if (($status -band 1) -eq 1 -and $consecutiveErrors -lt 20) {
-                # Masih ada kertas di baki! Jangan berhenti, beri waktu mekanik scanner bekerja
+            if (($status -band 1) -eq 1 -and $consecutiveErrors -lt 25) {
                 $consecutiveErrors++
                 Start-Sleep -Seconds 2
                 continue
             }
         } catch {}
         
-        # 4. Jika sudah ada lembar yang berhasil dipindai dan kertas sudah habis, selesai normal
+        # 4. Jika sudah ada minimal 1 lembar yang berhasil dipindai dan terjadi akhir dokumen:
         if ($scannedFiles.Count -gt 0) {
             $hasMorePages = $false
             break

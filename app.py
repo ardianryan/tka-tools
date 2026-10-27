@@ -211,9 +211,12 @@ def find_duplicate_in_queue(doc_type, hari, sesi, lab_num, kd_server, matched_sl
             continue
         
         # 1. Bandingkan Fingerprint Peserta Didik (Siswa)
-        # Jika minimal 3 nomor peserta identik, 100% berkas dan ruangan yang sama!
+        # Jika kedua berkas memiliki daftar siswa yang berbeda sama sekali (0 overlap), PASTI BUKAN duplikat!
         if participants and item.get("participants"):
             overlap = set(item.get("participants", [])) & set(participants)
+            if len(participants) >= 8 and len(item.get("participants", [])) >= 8 and len(overlap) == 0:
+                continue
+            # Jika minimal 3 nomor peserta identik, 100% berkas dan ruangan yang sama (Rangkap 2)!
             if len(overlap) >= 3:
                 return item
 
@@ -331,8 +334,29 @@ def process_image_file(file_path: str):
         logger.error("Error processing %s: %s", file_path, str(e))
         return None
 
-# Start hot-folder watcher
-watcher = FolderWatcher(watch_dir=INBOX_DIR, callback=process_image_file)
+def process_batch_files(file_paths: list) -> list:
+    """
+    Memproses sekumpulan berkas hasil pemindaian secara sekuensial
+    SETELAH seluruh proses scanning berhenti dan berkas tersimpan utuh di inbox.
+    """
+    if not file_paths:
+        return []
+    
+    # Urutkan berkas secara natural (0001, 0002, ...)
+    sorted_paths = sorted(file_paths, key=lambda p: Path(p).name)
+    logger.info("Memulai analisis batch OCR & pencocokan untuk %d berkas...", len(sorted_paths))
+    
+    results = []
+    for fp in sorted_paths:
+        item = process_image_file(fp)
+        if item:
+            results.append(item)
+            
+    logger.info("Batch OCR selesai: %d berkas diproses.", len(results))
+    return results
+
+# Start hot-folder watcher dengan batch callback dan settling window
+watcher = FolderWatcher(watch_dir=INBOX_DIR, batch_callback=process_batch_files, settle_delay=5.0)
 watcher.start()
 
 # Sync slots on startup
@@ -426,18 +450,35 @@ def api_scan():
     source = data.get("source", "ADF") # "ADF" or "Flatbed"
     prefix = data.get("prefix", "EpsonL5290")
     
-    res = scanner.trigger_scan(source=source, prefix=prefix)
-    if res.get("success"):
-        # Process newly scanned files
-        scanned_files = res.get("files", [])
-        processed_items = []
-        for sf in scanned_files:
-            item = process_image_file(sf)
-            if item:
-                processed_items.append(item)
-        return jsonify({"success": True, "count": len(processed_items), "items": processed_items})
-    else:
-        return jsonify({"success": False, "msg": res.get("msg")}), 400
+    # 1. Jeda FolderWatcher agar tidak memproses berkas setengah jalan saat scanner masih berjalan
+    watcher.pause()
+    try:
+        # 2. Jalankan proses pemindaian fisik sampai scanner benar-benar berhenti dan kertas habis
+        res = scanner.trigger_scan(source=source, prefix=prefix)
+        if res.get("success"):
+            scanned_files = res.get("files", [])
+            # Tandai berkas yang baru dipindai agar watcher tidak memproses ulang
+            for sf in scanned_files:
+                watcher.mark_processed(sf)
+
+            # 3. Proses scanning SELESAI TOTAL dan berkas tersimpan di inbox.
+            # Sekarang baru jalankan analisis OCR dan pencocokan antrean secara batch!
+            processed_items = process_batch_files(scanned_files)
+            ready_c = sum(1 for it in processed_items if it.get("status") == "READY")
+            dup_c = sum(1 for it in processed_items if it.get("status") == "DUPLICATE_SKIPPED")
+            
+            return jsonify({
+                "success": True,
+                "count": len(processed_items),
+                "ready_count": ready_c,
+                "duplicates_count": dup_c,
+                "items": processed_items
+            })
+        else:
+            return jsonify({"success": False, "msg": res.get("msg")}), 400
+    finally:
+        # 4. Lanjutkan kembali watcher setelah batch selesai
+        watcher.resume()
 
 @app.route("/api/upload_local", methods=["POST"])
 def api_upload_local():
