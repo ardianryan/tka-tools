@@ -199,9 +199,9 @@ def sync_portal_slots():
         logger.error("Failed to sync portal slots: %s", str(e))
         return False, str(e)
 
-def find_duplicate_in_queue(doc_type, hari, sesi, lab_num, kd_server, matched_slot, current_file_path):
+def find_duplicate_in_queue(doc_type, hari, sesi, lab_num, kd_server, matched_slot, current_file_path, participants=None):
     """
-    Mendeteksi berkas rangkap 2 yang identik dalam antrean.
+    Mendeteksi berkas rangkap 2 yang identik dalam antrean secara cerdas.
     Mengembalikan berkas utama pertama yang cocok, atau None.
     """
     for item in queue:
@@ -210,7 +210,14 @@ def find_duplicate_in_queue(doc_type, hari, sesi, lab_num, kd_server, matched_sl
         if item.get("doc_type") != doc_type:
             continue
         
-        # 1. Bandingkan slot jadwal yang dicocokkan
+        # 1. Bandingkan Fingerprint Peserta Didik (Siswa)
+        # Jika minimal 3 nomor peserta identik, 100% berkas dan ruangan yang sama!
+        if participants and item.get("participants"):
+            overlap = set(item.get("participants", [])) & set(participants)
+            if len(overlap) >= 3:
+                return item
+
+        # 2. Bandingkan slot jadwal yang dicocokkan
         if matched_slot and item.get("matched_slot"):
             s1 = matched_slot
             s2 = item.get("matched_slot")
@@ -221,12 +228,16 @@ def find_duplicate_in_queue(doc_type, hari, sesi, lab_num, kd_server, matched_sl
                 s1.get("nm_ruang", "") and s1.get("nm_ruang") == s2.get("nm_ruang")):
                 return item
 
-        # 2. Bandingkan metadata hasil OCR
+        # 3. Bandingkan metadata hasil OCR (Hari, Sesi, dan Ruang)
+        # PENTING: Ruang/Lab yang berbeda (misal Lab 1 vs Lab 2) BUKAN duplikat meski servernya sama!
+        if lab_num and item.get("lab_num") and item.get("lab_num") != lab_num:
+            continue
+
         if (hari and str(item.get("hari", "")) == str(hari) and
             sesi and str(item.get("sesi", "")) == str(sesi)):
             if lab_num and item.get("lab_num") == lab_num:
                 return item
-            if kd_server and item.get("kd_server") == kd_server:
+            if not lab_num and not item.get("lab_num") and kd_server and item.get("kd_server") == kd_server:
                 return item
 
     return None
@@ -251,7 +262,8 @@ def process_image_file(file_path: str):
         slots = cached_slots["bap"] if doc_type == "BAP" else cached_slots["dh"]
         
         matched_slot, score, reason = ocr_engine.match_slot(parsed, slots)
-        
+        participants = parsed.get("participants", [])
+
         # Smart Deduplication (Deteksi Rangkap 2)
         dup_item = find_duplicate_in_queue(
             doc_type=doc_type,
@@ -260,7 +272,8 @@ def process_image_file(file_path: str):
             lab_num=parsed.get("lab_num"),
             kd_server=parsed.get("kd_server"),
             matched_slot=matched_slot,
-            current_file_path=abs_path
+            current_file_path=abs_path,
+            participants=participants
         )
 
         is_duplicate = False
@@ -268,17 +281,27 @@ def process_image_file(file_path: str):
         status = "READY" if matched_slot and score >= 60 else "NEEDS_REVIEW"
 
         if dup_item:
-            is_duplicate = True
-            duplicate_of = dup_item.get("file_name")
-            status = "DUPLICATE_SKIPPED"
-            reason = f"Rangkap 2 Terdeteksi: Berkas identik dengan {duplicate_of} (Hari {parsed.get('hari') or '-'}, Sesi {parsed.get('sesi') or '-'}, {parsed.get('ruang') or '-'}). Diabaikan otomatis agar tidak terunggah ganda."
-            logger.info("Smart Deduplication: %s diabaikan (duplikat rangkap 2 dari %s)", Path(file_path).name, duplicate_of)
-            try:
-                dup_dest = DUPLICATES_DIR / f"DUP_{Path(file_path).name}"
-                if not dup_dest.exists():
-                    shutil.copy2(file_path, dup_dest)
-            except Exception as e:
-                logger.debug("Failed archiving duplicate: %s", str(e))
+            # Evaluasi kualitas metadata antara berkas lama vs berkas baru
+            if dup_item.get("sesi") is None and parsed.get("sesi") is not None:
+                # Berkas baru lebih lengkap! Jadikan berkas baru READY dan turunkan berkas lama ke DUPLICATE_SKIPPED
+                dup_item["status"] = "DUPLICATE_SKIPPED"
+                dup_item["is_duplicate"] = True
+                dup_item["duplicate_of"] = Path(file_path).name
+                dup_item["match_reason"] = f"Rangkap 2 Terdeteksi: Digantikan oleh {Path(file_path).name} yang hasil OCR-nya lebih lengkap."
+                is_duplicate = False
+                status = "READY" if matched_slot and score >= 60 else "NEEDS_REVIEW"
+            else:
+                is_duplicate = True
+                duplicate_of = dup_item.get("file_name")
+                status = "DUPLICATE_SKIPPED"
+                reason = f"Rangkap 2 Terdeteksi: Berkas identik dengan {duplicate_of} (Hari {parsed.get('hari') or '-'}, Sesi {parsed.get('sesi') or '-'}, {parsed.get('ruang') or '-'}). Diabaikan otomatis agar tidak terunggah ganda."
+                logger.info("Smart Deduplication: %s diabaikan (duplikat rangkap 2 dari %s)", Path(file_path).name, duplicate_of)
+                try:
+                    dup_dest = DUPLICATES_DIR / f"DUP_{Path(file_path).name}"
+                    if not dup_dest.exists():
+                        shutil.copy2(file_path, dup_dest)
+                except Exception as e:
+                    logger.debug("Failed archiving duplicate: %s", str(e))
 
         queue_item = {
             "id": f"doc_{len(queue) + 1}_{int(Path(file_path).stat().st_mtime)}",
@@ -292,6 +315,7 @@ def process_image_file(file_path: str):
             "kd_server": parsed.get("kd_server"),
             "mapel": parsed.get("mapel"),
             "tanggal": parsed.get("tanggal"),
+            "participants": participants,
             "matched_slot": matched_slot,
             "match_score": score,
             "match_reason": reason,
@@ -467,6 +491,25 @@ def api_queue_clear():
     global queue
     queue = []
     return jsonify({"success": True})
+
+@app.route("/api/queue/reprocess_all", methods=["POST"])
+def api_queue_reprocess_all():
+    global queue
+    queue = []
+    inbox_files = sorted(list(INBOX_DIR.glob("*.jpg")) + list(INBOX_DIR.glob("*.jpeg")) + list(INBOX_DIR.glob("*.png")))
+    processed = []
+    for f in inbox_files:
+        item = process_image_file(str(f))
+        if item:
+            processed.append(item)
+    return jsonify({
+        "success": True,
+        "total": len(inbox_files),
+        "processed": len(processed),
+        "ready": sum(1 for q in queue if q["status"] == "READY"),
+        "duplicates": sum(1 for q in queue if q["status"] == "DUPLICATE_SKIPPED")
+    })
+
 
 @app.route("/api/queue/update_match", methods=["POST"])
 def api_queue_update_match():

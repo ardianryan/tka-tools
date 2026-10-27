@@ -603,6 +603,7 @@
                             </div>
                         </div>
                         <div class="d-flex align-items-center gap-2">
+                            <button class="btn btn-outline-primary btn-sm" onclick="reprocessInbox()" title="Analisis Ulang Berkas di Inbox dengan OCR & Deduplikasi Cerdas"><i class="fa-solid fa-arrows-rotate"></i> Analisis Ulang</button>
                             <button class="btn btn-outline-secondary btn-sm" onclick="clearQueue()">Kosongkan</button>
                             <button class="btn btn-primary btn-sm px-3" id="btnUploadAll" onclick="uploadAllReady()">
                                 Unggah Antrean (<span id="readyCountBtn">0</span>)
@@ -1271,6 +1272,28 @@
             await fetch("/api/queue/clear", {method: "POST"});
             loadQueue();
             refreshStatus();
+        }
+    }
+
+    async function reprocessInbox() {
+        Swal.fire({
+            title: 'Menganalisis Ulang Inbox...',
+            text: 'Memproses seluruh berkas di folder inbox dengan OCR cerdas & deteksi rangkap 2.',
+            allowOutsideClick: false,
+            didOpen: () => { Swal.showLoading(); }
+        });
+        try {
+            const res = await fetch("/api/queue/reprocess_all", { method: "POST" });
+            const data = await res.json();
+            Swal.fire({
+                title: 'Analisis Selesai',
+                text: `${data.ready} berkas Siap Unggah, ${data.duplicates} rangkap 2 otomatis dilewati dari total ${data.total} berkas.`,
+                icon: 'success'
+            });
+            loadQueue();
+            refreshStatus();
+        } catch (err) {
+            Swal.fire('Error', '' + err, 'error');
         }
     }
 

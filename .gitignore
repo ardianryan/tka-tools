@@ -18,6 +18,8 @@ processed/*
 !processed/.gitkeep
 temp_uploads/*
 !temp_uploads/.gitkeep
+tests_archive/
+scratch/
 logs/*.csv
 logs/*.jsonl
 !logs/.gitkeep
