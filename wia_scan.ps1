@@ -46,19 +46,27 @@ if (-not $scannerInfo) {
 
 $device = $scannerInfo.Connect()
 
-# Configure Document Handling (1 = Flatbed, 2 = Feeder/ADF)
+# Configure Document Handling (WIA Standard: 1 = Feeder/ADF, 2 = Flatbed)
 try {
     $handlingProp = $device.Properties.Item("Document Handling Select")
     if ($handlingProp) {
         if ($Source -eq "ADF") {
-            $handlingProp.Value = 2
+            $handlingProp.Value = 1  # 1 = FEEDER / ADF
         } else {
-            $handlingProp.Value = 1
+            $handlingProp.Value = 2  # 2 = FLATBED
         }
     }
 } catch {
     # Flatbed-only scanner or unconfigurable feeder
 }
+
+# Configure Pages property if available
+try {
+    $pagesProp = $device.Properties.Item("Pages")
+    if ($pagesProp) {
+        $pagesProp.Value = 1
+    }
+} catch {}
 
 $scannedFiles = @()
 $counter = 1
@@ -82,9 +90,19 @@ do {
             break
         }
     } catch {
+        # Feeder ran out of paper or scan completed
         break
     }
 } while ($Source -eq "ADF" -and $counter -le 100)
+
+if ($scannedFiles.Count -eq 0) {
+    $res = @{
+        success = $false
+        msg = if ($Source -eq "ADF") { "Baki ADF kosong atau kertas tidak terdeteksi. Silakan masukkan tumpukan dokumen ke feeder ADF." } else { "Tidak ada dokumen di kaca flatbed." }
+    }
+    $res | ConvertTo-Json -Compress
+    exit 0
+}
 
 $res = @{
     success = $true
