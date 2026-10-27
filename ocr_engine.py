@@ -44,6 +44,13 @@ TANGGAL_HARI_MAP = {
 def clean_ocr_text(text: str) -> str:
     return re.sub(r'[ \t]+', ' ', text)
 
+def get_line_text(l) -> str:
+    if isinstance(l, str):
+        return l
+    if hasattr(l, "text"):
+        return getattr(l, "text", "")
+    return str(l)
+
 def parse_tka_document(ocr_lines: list, full_text: str) -> dict:
     text = clean_ocr_text(full_text)
     rules = load_settings().get("ocr_rules", {})
@@ -93,7 +100,7 @@ def parse_tka_document(ocr_lines: list, full_text: str) -> dict:
             doc["ruang"] = f"Lab {doc['lab_num']}"
             break
         for line in ocr_lines:
-            m = re.search(r_pat, line.text, re.I)
+            m = re.search(r_pat, get_line_text(line), re.I)
             if m:
                 try:
                     doc["lab_num"] = int(m.group(1))
@@ -148,11 +155,13 @@ def parse_tka_document(ocr_lines: list, full_text: str) -> dict:
     # L10: Sesi, L20: 1
     if not doc["sesi"] and doc["doc_type"] == "BAP":
         for i, line in enumerate(ocr_lines):
-            if "Sesi" in line.text:
+            l_text = get_line_text(line)
+            if "Sesi" in l_text:
                 # look ahead for a solitary number 1, 2, or 3
                 for next_l in ocr_lines[i+1:i+15]:
-                    if next_l.text.strip() in ["1", "2", "3"]:
-                        doc["sesi"] = int(next_l.text.strip())
+                    nl_text = get_line_text(next_l).strip()
+                    if nl_text in ["1", "2", "3"]:
+                        doc["sesi"] = int(nl_text)
                         break
                 if doc["sesi"]:
                     break
@@ -160,15 +169,17 @@ def parse_tka_document(ocr_lines: list, full_text: str) -> dict:
     # In DH, header row often has: "SESI ... 1" or "SESI ... 2"
     if not doc["sesi"] and doc["doc_type"] == "DH":
         for i, line in enumerate(ocr_lines):
-            if "SESI" in line.text.upper():
+            l_text = get_line_text(line)
+            if "SESI" in l_text.upper():
                 # check if there's digit 1, 2, 3 in same line or next line
-                nums = re.findall(r'\b([1-3])\b', line.text)
+                nums = re.findall(r'\b([1-3])\b', l_text)
                 if nums:
                     doc["sesi"] = int(nums[-1])
                     break
                 for next_l in ocr_lines[i+1:i+8]:
-                    if next_l.text.strip() in ["1", "2", "3"]:
-                        doc["sesi"] = int(next_l.text.strip())
+                    nl_text = get_line_text(next_l).strip()
+                    if nl_text in ["1", "2", "3"]:
+                        doc["sesi"] = int(nl_text)
                         break
                 if doc["sesi"]:
                     break

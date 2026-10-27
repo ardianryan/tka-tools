@@ -70,8 +70,10 @@ try {
 
 $scannedFiles = @()
 $counter = 1
+$hasMorePages = $true
+$retryCount = 0
 
-do {
+while ($hasMorePages -and $counter -le 100) {
     try {
         $item = $device.Items(1)
         try {
@@ -85,15 +87,45 @@ do {
         $image.SaveFile($fileName)
         $scannedFiles += $fileName
         $counter++
+        $retryCount = 0
         
         if ($Source -ne "ADF") {
             break
         }
+        
+        # Jeda sejenak agar rol ADF scanner menarik lembar berikutnya
+        Start-Sleep -Milliseconds 800
     } catch {
-        # Feeder ran out of paper or scan completed
+        $ex = $_.Exception
+        $hresult = 0
+        if ($ex -and $ex.HResult) {
+            $hresult = $ex.HResult
+        }
+        $msg = if ($ex) { $ex.Message } else { "" }
+        
+        # 0x80210003 (-2145320957) = WIA_ERROR_PAPER_EMPTY (kertas di baki ADF habis)
+        if ($hresult -eq -2145320957 -or $msg -like "*empty*" -or $msg -like "*0x80210003*") {
+            $hasMorePages = $false
+            break
+        }
+        
+        # 0x80210006 (-2145320954) = WIA_ERROR_BUSY (scanner sedang memutar mekanik ADF / sibuk)
+        if (($hresult -eq -2145320954 -or $msg -like "*busy*" -or $msg -like "*0x80210006*") -and $retryCount -lt 15) {
+            $retryCount++
+            Start-Sleep -Seconds 1
+            continue
+        }
+        
+        # Jika sudah berhasil memindai minimal 1 lembar dan terjadi akhir dokumen, selesai normal
+        if ($scannedFiles.Count -gt 0) {
+            $hasMorePages = $false
+            break
+        }
+        
+        # Jika belum ada 1 lembar pun yang terpindai, hentikan
         break
     }
-} while ($Source -eq "ADF" -and $counter -le 100)
+}
 
 if ($scannedFiles.Count -eq 0) {
     $res = @{
