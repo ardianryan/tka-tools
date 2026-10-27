@@ -24,6 +24,8 @@ from config import (
     MAX_CONTENT_LENGTH,
     SERVER_HOST,
     SERVER_PORT,
+    APP_VERSION,
+    GITHUB_REPO,
 )
 from tka_client import TKAClient
 from ocr_engine import OCREngine
@@ -31,6 +33,7 @@ from scanner_wia import ScannerWIA
 from folder_watcher import FolderWatcher
 from upload_logger import record_upload, get_history
 from settings_manager import load_settings, save_settings
+from updater import update_checker
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(name)s: %(message)s")
 logger = logging.getLogger("SmartTKAServer")
@@ -365,9 +368,29 @@ try:
 except Exception:
     pass
 
+# Check for application updates in background on startup
+try:
+    update_checker.start_background_check()
+except Exception as e:
+    logger.debug("Failed to start background update checker: %s", e)
+
 @app.route("/")
 def index():
-    return render_template("index.html")
+    return render_template("index.html", app_version=APP_VERSION, github_repo=GITHUB_REPO)
+
+@app.route("/api/app/version")
+def api_app_version():
+    return jsonify({
+        "version": APP_VERSION,
+        "repo": GITHUB_REPO,
+        "repo_url": f"https://github.com/{GITHUB_REPO}"
+    })
+
+@app.route("/api/app/update_check")
+def api_app_update_check():
+    force = request.args.get("force", "").lower() in ["1", "true", "yes"]
+    result = update_checker.check(force=force)
+    return jsonify(result)
 
 @app.route("/api/status")
 def api_status():

@@ -31,6 +31,8 @@ hidden_imports = [
     'PIL',
     'webview',
     'pytesseract',
+    'packaging',
+    'packaging.version',
 ]
 
 if sys.platform.startswith('win'):

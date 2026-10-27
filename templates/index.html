@@ -386,9 +386,12 @@
     <!-- LEFT SIDEBAR -->
     <aside id="sidebar">
         <!-- Brand Header -->
-        <div class="sidebar-brand d-flex align-items-center gap-2">
-            <img src="/static/favicon-32x32.png" alt="TKA Logo" width="22" height="22" class="rounded-1 shadow-sm" style="flex-shrink: 0;">
-            <span class="fw-bold tracking-tight">TKA Auto-Uploader</span>
+        <div class="sidebar-brand d-flex align-items-center justify-content-between">
+            <div class="d-flex align-items-center gap-2">
+                <img src="/static/favicon-32x32.png" alt="TKA Logo" width="22" height="22" class="rounded-1 shadow-sm" style="flex-shrink: 0;">
+                <span class="fw-bold tracking-tight">TKA Scanner</span>
+            </div>
+            <span class="badge bg-secondary-subtle text-secondary font-mono" style="font-size: 0.65rem;" id="sideAppVersionBadge">{{ app_version }}</span>
         </div>
 
         <div class="px-3 py-2 text-secondary font-mono small border-bottom border-secondary border-opacity-10" id="sidebarUserCode">
@@ -457,8 +460,11 @@
                 <span>Portal TKA:</span>
                 <span class="font-mono text-success" id="sidePortalStatus">Online</span>
             </div>
-            <div class="mt-2 pt-2 border-top border-secondary border-opacity-10 text-secondary opacity-75" style="font-size: 0.68rem; line-height: 1.3;">
-                Alat Bantu Independen (Unofficial) &bull; DWYOR
+            <div class="d-flex align-items-center justify-content-between mt-2 pt-2 border-top border-secondary border-opacity-10 text-secondary" style="font-size: 0.68rem;">
+                <span id="sideAppVersionText">Smart TKA {{ app_version }}</span>
+                <a href="javascript:void(0)" onclick="checkAppUpdate(true)" class="text-secondary text-decoration-none" title="Periksa Pembaruan GitHub">
+                    <i class="fa-solid fa-arrows-rotate" id="sideUpdateCheckIcon"></i>
+                </a>
             </div>
         </div>
     </aside>
@@ -491,6 +497,27 @@
 
         <!-- DASHBOARD BODY CONTAINER -->
         <main class="p-4 flex-grow-1">
+
+            <!-- AUTO-UPDATE NOTIFICATION BANNER -->
+            <div id="updateBanner" class="alert alert-primary border-0 shadow-sm rounded-3 py-2 px-3 mb-4 d-none align-items-center justify-content-between">
+                <div class="d-flex align-items-center gap-3">
+                    <div class="rounded-circle bg-primary text-white d-flex align-items-center justify-content-center" style="width: 38px; height: 38px; flex-shrink: 0;">
+                        <i class="fa-solid fa-arrow-up-from-bracket"></i>
+                    </div>
+                    <div>
+                        <div class="fw-bold text-dark small" id="updateBannerTitle">Pembaruan Tersedia: Versi Baru Telah Rilis!</div>
+                        <div class="text-secondary" style="font-size: 0.78rem;" id="updateBannerDesc">Versi terbaru Smart TKA Scanner telah tersedia di GitHub.</div>
+                    </div>
+                </div>
+                <div class="d-flex align-items-center gap-2">
+                    <button type="button" class="btn btn-primary btn-sm px-3 fw-semibold shadow-sm" onclick="openUpdateModal()">
+                        <i class="fa-solid fa-cloud-arrow-down me-1"></i> Lihat & Unduh
+                    </button>
+                    <button type="button" class="btn btn-outline-secondary btn-sm px-2" onclick="dismissUpdateBanner()" title="Tutup">
+                        <i class="fa-solid fa-xmark"></i>
+                    </button>
+                </div>
+            </div>
 
             <!-- KPI METRICS ROW -->
             <div class="row g-3 mb-4">
@@ -825,6 +852,9 @@
                     <li class="nav-item">
                         <button class="nav-link" data-bs-toggle="tab" data-bs-target="#tab-rules">3. Aturan OCR & Ruang</button>
                     </li>
+                    <li class="nav-item">
+                        <button class="nav-link" data-bs-toggle="tab" data-bs-target="#tab-updates">4. Pembaruan</button>
+                    </li>
                 </ul>
 
                 <div class="tab-content" id="settingsTabContent">
@@ -901,11 +931,94 @@
                             <input type="text" class="form-control form-control-sm font-mono" id="cfgServerPrefix" value="" placeholder="misal: U01234567">
                         </div>
                     </div>
+
+                    <!-- Tab Updates -->
+                    <div class="tab-pane fade" id="tab-updates">
+                        <div class="p-3 bg-light rounded-2 border mb-3">
+                            <div class="d-flex align-items-center justify-content-between mb-2">
+                                <span class="small text-secondary">Versi Terpasang:</span>
+                                <span class="badge bg-primary font-mono" id="settingsCurrentVersion">{{ app_version }}</span>
+                            </div>
+                            <div class="d-flex align-items-center justify-content-between mb-2">
+                                <span class="small text-secondary">Repositori GitHub:</span>
+                                <a href="https://github.com/{{ github_repo }}" target="_blank" class="font-mono small text-decoration-none">
+                                    <i class="fa-brands fa-github me-1"></i>{{ github_repo }}
+                                </a>
+                            </div>
+                            <div class="d-flex align-items-center justify-content-between">
+                                <span class="small text-secondary">Status Pembaruan:</span>
+                                <span class="small font-mono fw-semibold" id="settingsUpdateStatusText">Memeriksa...</span>
+                            </div>
+                        </div>
+
+                        <div class="d-flex align-items-center justify-content-between">
+                            <span class="text-secondary small">Pemeriksaan otomatis berjalan di latar belakang setiap startup aplikasi.</span>
+                            <button type="button" class="btn btn-outline-primary btn-sm px-3" id="btnManualUpdateCheck" onclick="checkAppUpdate(true)">
+                                <i class="fa-solid fa-arrows-rotate me-1" id="iconManualUpdateCheck"></i> Periksa Sekarang
+                            </button>
+                        </div>
+                    </div>
                 </div>
             </div>
             <div class="modal-footer py-2 px-4 bg-light">
                 <button type="button" class="btn btn-outline-secondary btn-sm" data-bs-dismiss="modal">Tutup</button>
                 <button type="button" class="btn btn-primary btn-sm px-3" onclick="saveAppSettings()">Simpan Pengaturan</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- MODAL UPDATE DETECTED -->
+<div class="modal fade" id="modalAppUpdate" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content border-0 shadow-lg">
+            <div class="modal-header py-3 px-4 bg-light border-bottom">
+                <div class="d-flex align-items-center gap-2">
+                    <div class="rounded-2 bg-primary text-white p-2 d-flex align-items-center justify-content-center" style="width: 32px; height: 32px;">
+                        <i class="fa-solid fa-rocket"></i>
+                    </div>
+                    <div>
+                        <h6 class="modal-title fw-bold mb-0">Pembaruan Aplikasi Tersedia</h6>
+                        <span class="text-secondary small">Smart TKA Scanner & Auto-Uploader</span>
+                    </div>
+                </div>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body p-4">
+                <div class="d-flex align-items-center justify-content-between bg-light rounded-3 p-3 mb-3 border">
+                    <div>
+                        <div class="text-secondary small">Versi Terpasang:</div>
+                        <div class="fw-bold font-mono text-dark" id="updateModalCurrentVer">v1.0.0</div>
+                    </div>
+                    <div class="text-muted"><i class="fa-solid fa-arrow-right"></i></div>
+                    <div class="text-end">
+                        <div class="text-secondary small">Versi Terbaru:</div>
+                        <div class="fw-bold font-mono text-success" id="updateModalLatestVer">v1.0.1</div>
+                    </div>
+                </div>
+
+                <div class="mb-3">
+                    <label class="form-label small fw-bold text-dark mb-1">Catatan Rilis (Changelog):</label>
+                    <div class="border rounded-2 p-3 bg-light font-mono small text-secondary" id="updateModalChangelog" style="max-height: 180px; overflow-y: auto; white-space: pre-wrap; font-size: 0.78rem;">
+                        Tidak ada catatan rilis.
+                    </div>
+                </div>
+
+                <div class="p-3 rounded-2 border border-primary border-opacity-25 bg-primary bg-opacity-10 d-flex align-items-center justify-content-between">
+                    <div>
+                        <div class="fw-bold text-primary small" id="updateModalPackageName">SmartTKAScanner-Windows-x64.zip</div>
+                        <div class="text-secondary" style="font-size: 0.72rem;" id="updateModalPackageSize">Paket Rilis Resmi GitHub</div>
+                    </div>
+                    <a href="#" target="_blank" id="updateModalDirectDownloadBtn" class="btn btn-primary btn-sm px-3 shadow-sm">
+                        <i class="fa-solid fa-download me-1"></i> Unduh (.zip)
+                    </a>
+                </div>
+            </div>
+            <div class="modal-footer py-2 px-4 bg-light d-flex justify-content-between">
+                <a href="#" target="_blank" id="updateModalGithubLink" class="btn btn-outline-secondary btn-sm">
+                    <i class="fa-brands fa-github me-1"></i> Buka Halaman GitHub
+                </a>
+                <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Tutup</button>
             </div>
         </div>
     </div>
@@ -921,6 +1034,7 @@
     let activeItem = null;
     let uploadPollTimer = null;
     let activeTypeFilter = 'ALL';
+    let appUpdateInfo = null;
 
     document.addEventListener("DOMContentLoaded", () => {
         refreshStatus();
@@ -928,6 +1042,7 @@
         loadSlots();
         loadHistory();
         checkRunningUploadOnLoad();
+        checkAppUpdate(false);
         setInterval(refreshStatus, 8000);
     });
 
@@ -1739,6 +1854,117 @@
             Swal.fire(data.success ? 'Sukses' : 'Gagal', data.msg, data.success ? 'success' : 'error');
         } catch (err) {
             Swal.fire('Error', '' + err, 'error');
+        }
+    }
+
+    /* Auto-Update Detection & GitHub Releases */
+    async function checkAppUpdate(isManual = false) {
+        const iconBtn = document.getElementById("iconManualUpdateCheck");
+        const sideIcon = document.getElementById("sideUpdateCheckIcon");
+        if (iconBtn) iconBtn.classList.add("fa-spin");
+        if (sideIcon) sideIcon.classList.add("fa-spin");
+
+        try {
+            const url = `/api/app/update_check${isManual ? '?force=true' : ''}`;
+            const res = await fetch(url);
+            const data = await res.json();
+            appUpdateInfo = data;
+
+            // Update version info in settings modal
+            const statusText = document.getElementById("settingsUpdateStatusText");
+            if (statusText) {
+                if (data.update_available) {
+                    statusText.className = "small font-mono fw-semibold text-danger";
+                    statusText.innerText = `Pembaruan tersedia: ${data.latest_version}`;
+                } else if (data.success) {
+                    statusText.className = "small font-mono fw-semibold text-success";
+                    statusText.innerText = `Aplikasi sudah versi terbaru (${data.current_version})`;
+                } else {
+                    statusText.className = "small font-mono fw-semibold text-warning";
+                    statusText.innerText = `Gagal memeriksa (${data.error || 'Offline'})`;
+                }
+            }
+
+            if (data.update_available) {
+                // Show update banner on dashboard
+                const banner = document.getElementById("updateBanner");
+                if (banner) {
+                    document.getElementById("updateBannerTitle").innerHTML = `Pembaruan Tersedia: <span class="badge bg-white text-primary font-mono ms-1">${data.latest_version}</span>`;
+                    const pubDateStr = data.published_at ? new Date(data.published_at).toLocaleDateString('id-ID', {day: 'numeric', month: 'long', year: 'numeric'}) : '';
+                    document.getElementById("updateBannerDesc").innerText = `Versi baru telah dirilis ${pubDateStr ? 'pada ' + pubDateStr : ''}. Klik untuk melihat catatan rilis & mengunduh.`;
+                    banner.classList.remove("d-none");
+                    banner.classList.add("d-flex");
+                }
+
+                if (isManual) {
+                    openUpdateModal();
+                }
+            } else {
+                if (isManual) {
+                    if (data.success) {
+                        Swal.fire({
+                            icon: 'success',
+                            title: 'Versi Terbaru',
+                            html: `Smart TKA Scanner versi <b>${data.current_version}</b> adalah versi paling baru.`,
+                            confirmButtonColor: '#2563eb'
+                        });
+                    } else {
+                        Swal.fire({
+                            icon: 'warning',
+                            title: 'Pemeriksaan Terkendala',
+                            text: data.error || 'Tidak dapat terhubung ke GitHub.',
+                            confirmButtonColor: '#2563eb'
+                        });
+                    }
+                }
+            }
+        } catch (err) {
+            console.warn("Update check failed:", err);
+            if (isManual) {
+                Swal.fire({
+                    icon: 'error',
+                    title: 'Gagal Memeriksa',
+                    text: 'Terjadi kesalahan saat menghubungi server: ' + err,
+                    confirmButtonColor: '#2563eb'
+                });
+            }
+        } finally {
+            if (iconBtn) iconBtn.classList.remove("fa-spin");
+            if (sideIcon) sideIcon.classList.remove("fa-spin");
+        }
+    }
+
+    function openUpdateModal() {
+        if (!appUpdateInfo) return;
+        
+        document.getElementById("updateModalCurrentVer").innerText = appUpdateInfo.current_version || "v1.0.0";
+        document.getElementById("updateModalLatestVer").innerText = appUpdateInfo.latest_version || "-";
+        document.getElementById("updateModalChangelog").innerText = appUpdateInfo.release_notes || "(Tidak ada catatan rilis khusus)";
+        
+        if (appUpdateInfo.asset_name) {
+            document.getElementById("updateModalPackageName").innerText = appUpdateInfo.asset_name;
+            const sizeMb = appUpdateInfo.asset_size ? (appUpdateInfo.asset_size / (1024 * 1024)).toFixed(1) + " MB" : "Rilis Resmi";
+            document.getElementById("updateModalPackageSize").innerText = `Paket Otomatis untuk Sistem Operasi Anda (${sizeMb})`;
+        } else {
+            document.getElementById("updateModalPackageName").innerText = `Smart TKA Scanner ${appUpdateInfo.latest_version}`;
+            document.getElementById("updateModalPackageSize").innerText = "Unduhan Halaman Rilis GitHub";
+        }
+
+        const downloadBtn = document.getElementById("updateModalDirectDownloadBtn");
+        downloadBtn.href = appUpdateInfo.download_url || appUpdateInfo.html_url || "#";
+        
+        const ghLink = document.getElementById("updateModalGithubLink");
+        ghLink.href = appUpdateInfo.html_url || "https://github.com/ardianryan/tka-tools/releases";
+
+        const modal = new bootstrap.Modal(document.getElementById("modalAppUpdate"));
+        modal.show();
+    }
+
+    function dismissUpdateBanner() {
+        const banner = document.getElementById("updateBanner");
+        if (banner) {
+            banner.classList.add("d-none");
+            banner.classList.remove("d-flex");
         }
     }
 </script>
