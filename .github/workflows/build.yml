@@ -132,6 +132,8 @@ jobs:
     needs: [ build-windows, build-macos, build-linux ]
     if: startsWith(github.ref, 'refs/tags/v') || github.event.inputs.create_release == 'true'
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
     steps:
       - name: Download Windows Artifact
         uses: actions/download-artifact@v4
@@ -150,6 +152,8 @@ jobs:
 
       - name: Create Release
         uses: softprops/action-gh-release@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
           files: |
             SmartTKAScanner-Windows-x64.zip
