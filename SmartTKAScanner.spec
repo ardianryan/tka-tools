@@ -10,9 +10,8 @@ datas = [
     ('settings.example.json', '.'),
 ]
 
-# Include local settings.json only if it exists (local builds), otherwise CI uses settings.example.json
-if os.path.exists('settings.json'):
-    datas.append(('settings.json', '.'))
+# Note: settings.json containing credentials is NEVER bundled!
+# Only settings.example.json is distributed. settings.json is created dynamically at runtime.
 
 if sys.platform.startswith('win'):
     if os.path.exists('wia_scan.ps1'):
