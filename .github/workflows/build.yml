@@ -37,19 +37,26 @@ jobs:
         run: |
           pyinstaller SmartTKAScanner.spec --noconfirm
 
-      - name: Prepare Package Folders
+      - name: Prepare Package Folders and Installer
         run: |
           New-Item -ItemType Directory -Force -Path dist\SmartTKAScanner\inbox
           New-Item -ItemType Directory -Force -Path dist\SmartTKAScanner\processed
           New-Item -ItemType Directory -Force -Path dist\SmartTKAScanner\logs
           Copy-Item settings.example.json dist\SmartTKAScanner\settings.example.json
           Compress-Archive -Path dist\SmartTKAScanner\* -DestinationPath SmartTKAScanner-Windows-x64.zip
+          if (Get-Command iscc -ErrorAction SilentlyContinue) {
+            iscc SmartTKAScanner.iss
+          } elseif (Test-Path "C:\Program Files (x86)\Inno Setup 6\ISCC.exe") {
+            & "C:\Program Files (x86)\Inno Setup 6\ISCC.exe" SmartTKAScanner.iss
+          }
 
       - name: Upload Windows Artifact
         uses: actions/upload-artifact@v4
         with:
           name: SmartTKAScanner-Windows-x64
-          path: SmartTKAScanner-Windows-x64.zip
+          path: |
+            SmartTKAScanner-Windows-x64.zip
+            SmartTKAScanner-Setup-*.exe
 
   build-macos:
     name: Build macOS (Universal/arm64)
@@ -156,6 +163,7 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
           files: |
+            SmartTKAScanner-Setup-*.exe
             SmartTKAScanner-Windows-x64.zip
             SmartTKAScanner-macOS.zip
             SmartTKAScanner-Linux-x64.tar.gz
