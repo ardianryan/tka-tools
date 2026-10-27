@@ -1198,9 +1198,12 @@
     }
 
     async function triggerScan(source) {
+        const isAdf = (source === "ADF");
         Swal.fire({
-            title: `Memindai dari ${source}...`,
-            text: 'Memproses pemindaian... Harap tunggu.',
+            title: isAdf ? 'Memindai dari Baki ADF...' : 'Memindai dari Kaca Flatbed...',
+            text: isAdf 
+                ? 'Scanner sedang menarik seluruh tumpukan lembar dari feeder ADF. Harap biarkan rol scanner menarik kertas sampai baki kosong...' 
+                : 'Scanner sedang memindai dokumen di kaca... Harap tunggu.',
             allowOutsideClick: false,
             didOpen: () => Swal.showLoading()
         });
@@ -1213,7 +1216,11 @@
             });
             const data = await res.json();
             if (data.success) {
-                Swal.fire('Selesai', `Berhasil memindai ${data.count} halaman.`, 'success');
+                Swal.fire({
+                    title: 'Selesai Memindai',
+                    text: `Berhasil memindai ${data.count} halaman dari ${source}. Seluruh berkas telah diproses OCR dan masuk ke antrean.`,
+                    icon: 'success'
+                });
                 loadQueue();
                 refreshStatus();
             } else {

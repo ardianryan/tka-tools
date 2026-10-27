@@ -106,7 +106,7 @@ class ScannerWIA:
                 "-DeviceName", str(target_name),
                 "-Dpi", str(dpi_val)
             ]
-            res = subprocess.run(cmd, capture_output=True, text=True, timeout=120)
+            res = subprocess.run(cmd, capture_output=True, text=True, timeout=300)
             out = res.stdout.strip()
             if "ERROR:" in out:
                 return {"success": False, "msg": out}

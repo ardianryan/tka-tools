@@ -60,11 +60,15 @@ try {
     # Flatbed-only scanner or unconfigurable feeder
 }
 
-# Configure Pages property if available
+# Configure Pages property (WIA Standard: 0 = ALL pages until feeder empty, 1 = single page)
 try {
     $pagesProp = $device.Properties.Item("Pages")
     if ($pagesProp) {
-        $pagesProp.Value = 1
+        if ($Source -eq "ADF") {
+            $pagesProp.Value = 0  # 0 = Pindai seluruh halaman di baki ADF sampai habis
+        } else {
+            $pagesProp.Value = 1  # 1 = Satu halaman flatbed
+        }
     }
 } catch {}
 
