@@ -8,6 +8,17 @@ from settings_manager import load_settings
 
 logger = logging.getLogger("ScannerWIA")
 
+def _get_subprocess_flags() -> dict:
+    """Returns Windows flags to completely prevent console/cmd windows from popping up."""
+    flags = {}
+    if sys.platform == "win32":
+        flags["creationflags"] = getattr(subprocess, "CREATE_NO_WINDOW", 0x08000000)
+        si = subprocess.STARTUPINFO()
+        si.dwFlags |= subprocess.STARTF_USESHOWWINDOW
+        si.wShowWindow = 0  # SW_HIDE
+        flags["startupinfo"] = si
+    return flags
+
 PS_CHECK_SCANNER = """
 $wia = New-Object -ComObject WIA.DeviceManager
 $found = @()
@@ -29,11 +40,13 @@ class ScannerWIA:
         if sys.platform != "win32":
             return []
         try:
+            cmd = ["powershell", "-NoProfile", "-WindowStyle", "Hidden", "-ExecutionPolicy", "Bypass", "-Command", PS_CHECK_SCANNER]
             res = subprocess.run(
-                ["powershell", "-NoProfile", "-ExecutionPolicy", "Bypass", "-Command", PS_CHECK_SCANNER],
+                cmd,
                 capture_output=True,
                 text=True,
-                timeout=10
+                timeout=10,
+                **_get_subprocess_flags()
             )
             out = res.stdout.strip()
             if out:
@@ -97,6 +110,7 @@ class ScannerWIA:
             cmd = [
                 "powershell",
                 "-NoProfile",
+                "-WindowStyle", "Hidden",
                 "-ExecutionPolicy", "Bypass",
                 "-File", str(self.script_path),
                 "-Source", source,
@@ -106,7 +120,13 @@ class ScannerWIA:
                 "-DeviceName", str(target_name),
                 "-Dpi", str(dpi_val)
             ]
-            res = subprocess.run(cmd, capture_output=True, text=True, timeout=300)
+            res = subprocess.run(
+                cmd,
+                capture_output=True,
+                text=True,
+                timeout=300,
+                **_get_subprocess_flags()
+            )
             out = res.stdout.strip()
             if "ERROR:" in out:
                 return {"success": False, "msg": out}
