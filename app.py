@@ -19,6 +19,9 @@ from config import (
     DUPLICATES_DIR,
     UPLOAD_TEMP_DIR,
     LOG_CSV_PATH,
+    TKA_BASE_URL,
+    TKA_USERNAME,
+    TKA_PASSWORD,
     TKA_KD_UJIAN,
     ALLOWED_EXTENSIONS,
     MAX_CONTENT_LENGTH,
@@ -362,11 +365,12 @@ def process_batch_files(file_paths: list) -> list:
 watcher = FolderWatcher(watch_dir=INBOX_DIR, batch_callback=process_batch_files, settle_delay=5.0)
 watcher.start()
 
-# Sync slots on startup
-try:
-    sync_portal_slots()
-except Exception:
-    pass
+# Sync slots on startup if credentials are configured
+if tka_client.username and tka_client.password:
+    try:
+        sync_portal_slots()
+    except Exception as e:
+        logger.debug("Initial portal sync skipped or failed: %s", e)
 
 # Check for application updates in background on startup
 try:
@@ -409,7 +413,8 @@ def api_status():
         "dh_uploaded": dh_uploaded,
         "queue_count": len(queue),
         "ready_to_upload": sum(1 for q in queue if q["status"] in ["READY", "FAILED"]),
-        "duplicates_count": sum(1 for q in queue if q.get("status") == "DUPLICATE_SKIPPED")
+        "duplicates_count": sum(1 for q in queue if q.get("status") == "DUPLICATE_SKIPPED"),
+        "is_configured": bool(tka_client.username and tka_client.password)
     })
 
 @app.route("/api/settings", methods=["GET", "POST"])
@@ -425,6 +430,8 @@ def api_settings():
             tka_client.password = settings["portal"]["password"]
             tka_client.base_url = settings["portal"]["base_url"]
             tka_client.is_authenticated = False
+            if tka_client.username and tka_client.password:
+                threading.Thread(target=sync_portal_slots, daemon=True).start()
         if "ocr_rules" in data:
             settings["ocr_rules"].update(data["ocr_rules"])
         if "upload" in data:
