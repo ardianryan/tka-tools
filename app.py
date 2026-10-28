@@ -36,7 +36,7 @@ from scanner_wia import ScannerWIA
 from folder_watcher import FolderWatcher
 from upload_logger import record_upload, get_history
 from settings_manager import load_settings, save_settings
-from updater import update_checker
+from updater import update_checker, in_app_updater
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(name)s: %(message)s")
 logger = logging.getLogger("SmartTKAServer")
@@ -398,6 +398,18 @@ def api_app_update_check():
     force = request.args.get("force", "").lower() in ["1", "true", "yes"]
     result = update_checker.check(force=force)
     return jsonify(result)
+
+@app.route("/api/app/update_download", methods=["POST"])
+def api_app_update_download():
+    data = request.get_json(silent=True) or {}
+    url = data.get("download_url")
+    version = data.get("version")
+    ok, msg = in_app_updater.start_download_and_apply(download_url=url, target_version=version)
+    return jsonify({"success": ok, "msg": msg})
+
+@app.route("/api/app/update_status")
+def api_app_update_status():
+    return jsonify(in_app_updater.get_status())
 
 @app.route("/api/status")
 def api_status():

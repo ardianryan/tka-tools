@@ -1,14 +1,20 @@
 import sys
+import os
 import re
 import json
 import time
 import socket
 import logging
+import zipfile
+import shutil
 import threading
+import subprocess
+from pathlib import Path
 import urllib.request
 import urllib.error
 from typing import Dict, Any, Optional
-from config import APP_VERSION, GITHUB_REPO
+
+from config import APP_VERSION, GITHUB_REPO, BASE_DIR
 
 logger = logging.getLogger("SmartTKAUpdater")
 
@@ -36,39 +42,43 @@ def is_newer_version(latest_tag: str, current_tag: str) -> bool:
     except Exception:
         return parse_semver(latest_tag) > parse_semver(current_tag)
 
-def detect_platform_asset(assets: list) -> Optional[Dict[str, Any]]:
+def detect_platform_assets(assets: list) -> Dict[str, Optional[Dict[str, Any]]]:
     """
-    Selects the best download asset from GitHub release assets based on the host OS.
+    Selects the best download assets for in-place portable update (ZIP) and setup installer (EXE).
     """
+    result = {
+        "portable": None,
+        "installer": None
+    }
     if not assets:
-        return None
-    
-    current_os = sys.platform
-    keywords = []
-    if current_os.startswith("win"):
-        # Prioritize Windows Setup installer or zip
-        keywords = ["setup", "windows", "win-x64", "win64", ".exe", ".zip"]
-    elif current_os.startswith("linux"):
-        keywords = ["linux", "tar.gz", ".deb", ".rpm"]
-    elif current_os == "darwin":
-        keywords = ["macos", "darwin", "osx", ".dmg", ".zip"]
-    
-    # Priority 1: Match OS keyword and primary binary extension
-    for kw in keywords[:2]:
-        for asset in assets:
-            name = asset.get("name", "").lower()
-            if kw in name:
-                return asset
+        return result
 
-    # Priority 2: Any matching keyword
-    for kw in keywords:
+    current_os = sys.platform
+    if current_os.startswith("win"):
         for asset in assets:
             name = asset.get("name", "").lower()
-            if kw in name:
-                return asset
-                
-    # Fallback: First asset
-    return assets[0]
+            if ".zip" in name and "win" in name:
+                result["portable"] = asset
+            elif ".exe" in name and "setup" in name:
+                result["installer"] = asset
+            elif ".zip" in name and not result["portable"]:
+                result["portable"] = asset
+    elif current_os.startswith("linux"):
+        for asset in assets:
+            name = asset.get("name", "").lower()
+            if "linux" in name and (".tar.gz" in name or ".zip" in name):
+                result["portable"] = asset
+    elif current_os == "darwin":
+        for asset in assets:
+            name = asset.get("name", "").lower()
+            if "macos" in name or "darwin" in name:
+                result["portable"] = asset
+
+    # Fallback portable to first asset if not detected
+    if not result["portable"] and assets:
+        result["portable"] = assets[0]
+
+    return result
 
 class UpdateChecker:
     def __init__(self, current_version: str = APP_VERSION, repo: str = GITHUB_REPO):
@@ -78,7 +88,6 @@ class UpdateChecker:
         self._last_checked: float = 0.0
         self._cache_ttl_seconds: float = 900.0  # 15 minutes cache
         self._lock = threading.Lock()
-        self._is_checking = False
 
     def _fetch_from_web_fallback(self, timeout: int = 8) -> Optional[Dict[str, Any]]:
         """
@@ -97,7 +106,6 @@ class UpdateChecker:
                 if not tag or tag == "releases":
                     return None
 
-            # Fetch expanded assets list for this tag
             assets_url = f"https://github.com/{self.repo}/releases/expanded_assets/{tag}"
             req_assets = urllib.request.Request(
                 assets_url,
@@ -187,6 +195,7 @@ class UpdateChecker:
                 "release_notes": None,
                 "published_at": None,
                 "download_url": None,
+                "portable_url": None,
                 "html_url": f"https://github.com/{self.repo}/releases",
                 "asset_name": None,
                 "asset_size": None,
@@ -203,10 +212,13 @@ class UpdateChecker:
         has_update = is_newer_version(latest_tag, self.current_version) if latest_tag else False
         
         assets = data.get("assets", [])
-        matched_asset = detect_platform_asset(assets)
-        download_url = matched_asset.get("browser_download_url") if matched_asset else data.get("html_url")
-        asset_name = matched_asset.get("name") if matched_asset else None
-        asset_size = matched_asset.get("size") if matched_asset else None
+        matched_assets = detect_platform_assets(assets)
+        portable_asset = matched_assets.get("portable")
+        installer_asset = matched_assets.get("installer")
+
+        portable_url = portable_asset.get("browser_download_url") if portable_asset else None
+        installer_url = installer_asset.get("browser_download_url") if installer_asset else None
+        primary_download = portable_url or installer_url or data.get("html_url")
 
         result = {
             "success": True,
@@ -216,10 +228,12 @@ class UpdateChecker:
             "release_name": data.get("name") or latest_tag,
             "release_notes": data.get("body") or "",
             "published_at": data.get("published_at"),
-            "download_url": download_url,
+            "download_url": primary_download,
+            "portable_url": portable_url,
+            "installer_url": installer_url,
             "html_url": data.get("html_url"),
-            "asset_name": asset_name,
-            "asset_size": asset_size,
+            "asset_name": portable_asset.get("name") if portable_asset else (installer_asset.get("name") if installer_asset else None),
+            "asset_size": portable_asset.get("size") if portable_asset else (installer_asset.get("size") if installer_asset else None),
             "error": None,
             "checked_at": now
         }
@@ -229,16 +243,13 @@ class UpdateChecker:
             self._last_checked = now
 
         if has_update:
-            logger.info("New update available for Smart TKA Scanner: %s -> %s (%s)", self.current_version, latest_tag, download_url)
+            logger.info("New update available for Smart TKA Scanner: %s -> %s (%s)", self.current_version, latest_tag, primary_download)
         else:
             logger.info("Smart TKA Scanner is up to date (%s)", self.current_version)
 
         return result
 
     def start_background_check(self):
-        """
-        Runs check in a background daemon thread so application startup is non-blocking.
-        """
         def _worker():
             try:
                 self.check(force=False)
@@ -248,5 +259,204 @@ class UpdateChecker:
         thread = threading.Thread(target=_worker, name="BackgroundUpdateChecker", daemon=True)
         thread.start()
 
-# Global singleton
+class InAppUpdateManager:
+    """
+    Manages in-place zero-data-loss application updates (similar to VS Code / Antigravity).
+    Downloads the update package in background and replaces application binaries
+    while strictly preserving user data (settings.json, inbox, processed, logs).
+    """
+    def __init__(self, checker: UpdateChecker):
+        self.checker = checker
+        self.update_dir = BASE_DIR / "temp_update"
+        self._lock = threading.Lock()
+        self.state = {
+            "is_downloading": False,
+            "is_applying": False,
+            "progress_percent": 0.0,
+            "downloaded_bytes": 0,
+            "total_bytes": 0,
+            "status_text": "Siap",
+            "error": None,
+            "ready_to_apply": False,
+            "target_version": None,
+            "zip_path": None
+        }
+
+    def get_status(self) -> Dict[str, Any]:
+        with self._lock:
+            return dict(self.state)
+
+    def start_download_and_apply(self, download_url: str = None, target_version: str = None):
+        with self._lock:
+            if self.state["is_downloading"] or self.state["is_applying"]:
+                return False, "Proses pembaruan sedang berlangsung."
+            self.state["is_downloading"] = True
+            self.state["progress_percent"] = 0.0
+            self.state["status_text"] = "Memulai pengunduhan pembaruan..."
+            self.state["error"] = None
+            self.state["ready_to_apply"] = False
+            self.state["target_version"] = target_version
+
+        def _worker():
+            try:
+                url = download_url
+                if not url:
+                    chk = self.checker.check(force=True)
+                    url = chk.get("portable_url") or chk.get("download_url")
+
+                if not url or "releases" in url.split("/")[-1]:
+                    raise ValueError("URL paket pembaruan tidak valid atau belum dirilis.")
+
+                # Ensure temp_update directory
+                self.update_dir.mkdir(parents=True, exist_ok=True)
+                dest_zip = self.update_dir / "update_package.zip"
+
+                with self._lock:
+                    self.state["status_text"] = "Mengunduh paket pembaruan dari GitHub..."
+
+                req = urllib.request.Request(
+                    url,
+                    headers={"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"}
+                )
+
+                with urllib.request.urlopen(req, timeout=30) as resp:
+                    total_size = int(resp.headers.get("Content-Length", 0))
+                    with self._lock:
+                        self.state["total_bytes"] = total_size
+
+                    downloaded = 0
+                    chunk_size = 64 * 1024
+                    with open(dest_zip, "wb") as f_out:
+                        while True:
+                            chunk = resp.read(chunk_size)
+                            if not chunk:
+                                break
+                            f_out.write(chunk)
+                            downloaded += len(chunk)
+                            percent = round((downloaded / total_size) * 100, 1) if total_size > 0 else 50.0
+                            with self._lock:
+                                self.state["downloaded_bytes"] = downloaded
+                                self.state["progress_percent"] = percent
+                                self.state["status_text"] = f"Mengunduh pembaruan ({percent}% - {round(downloaded / (1024*1024), 1)} MB)..."
+
+                with self._lock:
+                    self.state["is_downloading"] = False
+                    self.state["ready_to_apply"] = True
+                    self.state["zip_path"] = str(dest_zip)
+                    self.state["status_text"] = "Pengunduhan selesai. Menyiapkan instalasi otomatis..."
+
+                # Automatically trigger apply
+                self.apply_update()
+
+            except Exception as e:
+                logger.error("In-app update download failed: %s", e)
+                with self._lock:
+                    self.state["is_downloading"] = False
+                    self.state["error"] = str(e)
+                    self.state["status_text"] = f"Gagal mengunduh pembaruan: {e}"
+
+        threading.Thread(target=_worker, name="InAppUpdateWorker", daemon=True).start()
+        return True, "Pengunduhan pembaruan dimulai."
+
+    def apply_update(self) -> tuple:
+        with self._lock:
+            self.state["is_applying"] = True
+            self.state["status_text"] = "Mengekstrak dan memasang pembaruan..."
+
+        try:
+            zip_path = self.update_dir / "update_package.zip"
+            if not zip_path.exists():
+                raise FileNotFoundError("Berkas paket pembaruan tidak ditemukan.")
+
+            extract_dir = self.update_dir / "extracted"
+            if extract_dir.exists():
+                shutil.rmtree(extract_dir, ignore_errors=True)
+            extract_dir.mkdir(parents=True, exist_ok=True)
+
+            # 1. Extract zip package
+            with zipfile.ZipFile(zip_path, "r") as zf:
+                zf.extractall(extract_dir)
+
+            # Check if extracted root contains a single subfolder (e.g. SmartTKAScanner/)
+            subdirs = [d for d in extract_dir.iterdir() if d.is_dir()]
+            files = [f for f in extract_dir.iterdir() if f.is_file()]
+            payload_dir = extract_dir
+            if len(subdirs) == 1 and not files:
+                payload_dir = subdirs[0]
+
+            # 2. CRITICAL PROTECTION: Remove any user data files from payload so user data is NEVER overwritten
+            protected_patterns = [
+                "settings.json", "inbox", "processed", "logs",
+                "temp_uploads", "DokumenTKA", ".env"
+            ]
+            for item in payload_dir.iterdir():
+                if item.name in protected_patterns:
+                    if item.is_dir():
+                        shutil.rmtree(item, ignore_errors=True)
+                    else:
+                        try:
+                            item.unlink()
+                        except Exception:
+                            pass
+
+            # 3. Create Windows bootstrap runner apply_update.cmd
+            cmd_script = self.update_dir / "apply_update.cmd"
+            script_content = f"""@echo off
+chcp 65001 >nul
+title Smart TKA Scanner - Pembaruan Otomatis
+echo.
+echo ========================================================
+echo   MEMASANG PEMBARUAN SMART TKA SCANNER...
+echo   Mohon tunggu beberapa detik, jangan tutup jendela ini.
+echo ========================================================
+echo.
+
+:: Tunggu 2 detik agar proses SmartTKAScanner.exe tertutup bersih
+timeout /t 2 /nobreak >nul
+
+:: Salin binary dan aset aplikasi baru tanpa menimpa folder data pengguna
+xcopy /E /Y /I "{payload_dir}\\*" "{BASE_DIR}\\" >nul 2>&1
+
+:: Bersihkan folder sementara
+timeout /t 1 /nobreak >nul
+rd /s /q "{self.update_dir}" >nul 2>&1
+
+:: Relaunch Smart TKA Scanner
+echo.
+echo Pembaruan selesai! Memulai kembali aplikasi...
+start "" "{BASE_DIR}\\SmartTKAScanner.exe"
+exit
+"""
+            with open(cmd_script, "w", encoding="utf-8") as f_cmd:
+                f_cmd.write(script_content)
+
+            with self._lock:
+                self.state["status_text"] = "Pembaruan siap dipasang! Merestart aplikasi dalam 2 detik..."
+
+            # 4. Spawn detached bootstrap updater runner
+            subprocess.Popen(
+                ["cmd.exe", "/c", str(cmd_script)],
+                cwd=str(BASE_DIR),
+                creationflags=0x08000000 | 0x00000008,  # CREATE_NO_WINDOW | DETACHED_PROCESS
+                close_fds=True
+            )
+
+            # 5. Smoothly exit after 1.5 seconds
+            def _delayed_exit():
+                time.sleep(1.5)
+                os._exit(0)
+
+            threading.Thread(target=_delayed_exit, daemon=True).start()
+            return True, "Pembaruan berhasil disiapkan. Aplikasi akan merestart otomatis."
+
+        except Exception as e:
+            logger.error("Failed to apply update: %s", e)
+            with self._lock:
+                self.state["is_applying"] = False
+                self.state["error"] = str(e)
+                self.state["status_text"] = f"Gagal memasang pembaruan: {e}"
+            return False, str(e)
+
+# Global singletons
 update_checker = UpdateChecker()
+in_app_updater = InAppUpdateManager(update_checker)

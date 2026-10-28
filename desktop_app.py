@@ -33,6 +33,15 @@ def find_available_port(host, preferred_port, max_attempts=20):
     return preferred_port
 
 def main():
+    # Set explicit AppUserModelID so Windows taskbar groups and shows the icon properly
+    if sys.platform.startswith("win"):
+        try:
+            import ctypes
+            myappid = "id.go.kemendikdasmen.smarttka.scanner"
+            ctypes.windll.shell32.SetCurrentProcessExplicitAppUserModelID(myappid)
+        except Exception:
+            pass
+
     # Detect available port to prevent port collisions
     target_port = find_available_port(SERVER_HOST, SERVER_PORT)
     if target_port != SERVER_PORT:

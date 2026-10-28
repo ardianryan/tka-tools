@@ -490,8 +490,11 @@
 
             <!-- Top Actions -->
             <div class="d-flex align-items-center gap-2">
+                <button class="btn btn-outline-primary btn-sm px-3" onclick="checkAppUpdate(true)" title="Periksa Pembaruan Versi GitHub">
+                    <i class="fa-solid fa-arrows-rotate me-1" id="topUpdateCheckIcon"></i> Cek Update
+                </button>
                 <button class="btn btn-outline-secondary btn-sm px-3" onclick="syncPortalData()">
-                    <i class="fa-solid fa-arrows-rotate me-1"></i> Sinkronisasi
+                    <i class="fa-solid fa-cloud-arrow-down me-1"></i> Sinkronisasi
                 </button>
                 <button class="btn btn-primary btn-sm px-3" onclick="triggerScan('ADF')">
                     <i class="fa-solid fa-plus me-1"></i> Scan ADF
@@ -1023,14 +1026,33 @@
                     </div>
                 </div>
 
-                <div class="p-3 rounded-2 border border-primary border-opacity-25 bg-primary bg-opacity-10 d-flex align-items-center justify-content-between">
+                <div class="p-3 rounded-2 border border-primary border-opacity-25 bg-primary bg-opacity-10 d-flex flex-wrap align-items-center justify-content-between gap-2">
                     <div>
                         <div class="fw-bold text-primary small" id="updateModalPackageName">SmartTKAScanner-Windows-x64.zip</div>
-                        <div class="text-secondary" style="font-size: 0.72rem;" id="updateModalPackageSize">Paket Rilis Resmi GitHub</div>
+                        <div class="text-secondary" style="font-size: 0.72rem;" id="updateModalPackageSize">Pembaruan Otomatis Tanpa Timpa Data</div>
                     </div>
-                    <a href="#" target="_blank" id="updateModalDirectDownloadBtn" class="btn btn-primary btn-sm px-3 shadow-sm">
-                        <i class="fa-solid fa-download me-1"></i> Unduh (.zip)
-                    </a>
+                    <div class="d-flex align-items-center gap-2">
+                        <button type="button" class="btn btn-success btn-sm px-3 shadow-sm fw-semibold" id="btnStartAutoUpdate" onclick="startInAppUpdate()">
+                            <i class="fa-solid fa-bolt me-1"></i> Perbarui Otomatis
+                        </button>
+                        <a href="#" target="_blank" id="updateModalDirectDownloadBtn" class="btn btn-outline-primary btn-sm px-2 shadow-sm" title="Unduh manual file rilis dari GitHub">
+                            <i class="fa-solid fa-download me-1"></i> Manual
+                        </a>
+                    </div>
+                </div>
+
+                <!-- LIVE AUTO-UPDATE PROGRESS CONTAINER -->
+                <div id="autoUpdateProgressContainer" class="d-none mt-3 p-3 bg-light rounded-3 border">
+                    <div class="d-flex justify-content-between align-items-center mb-1">
+                        <span class="small fw-semibold text-dark" id="autoUpdateStatusText">Mengunduh pembaruan...</span>
+                        <span class="small font-mono text-success fw-bold" id="autoUpdatePercentText">0%</span>
+                    </div>
+                    <div class="progress" style="height: 10px;">
+                        <div id="autoUpdateProgressBar" class="progress-bar progress-bar-striped progress-bar-animated bg-success" style="width: 0%"></div>
+                    </div>
+                    <div class="small text-muted mt-2" style="font-size: 0.72rem;">
+                        <i class="fa-solid fa-shield-halved me-1 text-success"></i> <b>Zero Data Loss:</b> Akun portal, pengaturan scanner, berkas antrean, dan riwayat unggah dijamin 100% aman (tidak tertimpa).
+                    </div>
                 </div>
             </div>
             <div class="modal-footer py-2 px-4 bg-light d-flex justify-content-between">
@@ -2020,8 +2042,10 @@
     async function checkAppUpdate(isManual = false) {
         const iconBtn = document.getElementById("iconManualUpdateCheck");
         const sideIcon = document.getElementById("sideUpdateCheckIcon");
+        const topIcon = document.getElementById("topUpdateCheckIcon");
         if (iconBtn) iconBtn.classList.add("fa-spin");
         if (sideIcon) sideIcon.classList.add("fa-spin");
+        if (topIcon) topIcon.classList.add("fa-spin");
 
         try {
             const url = `/api/app/update_check${isManual ? '?force=true' : ''}`;
@@ -2050,7 +2074,7 @@
                 if (banner) {
                     document.getElementById("updateBannerTitle").innerHTML = `Pembaruan Tersedia: <span class="badge bg-white text-primary font-mono ms-1">${data.latest_version}</span>`;
                     const pubDateStr = data.published_at ? new Date(data.published_at).toLocaleDateString('id-ID', {day: 'numeric', month: 'long', year: 'numeric'}) : '';
-                    document.getElementById("updateBannerDesc").innerText = `Versi baru telah dirilis ${pubDateStr ? 'pada ' + pubDateStr : ''}. Klik untuk melihat catatan rilis & mengunduh.`;
+                    document.getElementById("updateBannerDesc").innerText = `Versi baru telah dirilis ${pubDateStr ? 'pada ' + pubDateStr : ''}. Klik tombol di bawah untuk memperbarui otomatis tanpa menimpa data.`;
                     banner.classList.remove("d-none");
                     banner.classList.add("d-flex");
                 }
@@ -2090,23 +2114,24 @@
         } finally {
             if (iconBtn) iconBtn.classList.remove("fa-spin");
             if (sideIcon) sideIcon.classList.remove("fa-spin");
+            if (topIcon) topIcon.classList.remove("fa-spin");
         }
     }
 
     function openUpdateModal() {
         if (!appUpdateInfo) return;
         
-        document.getElementById("updateModalCurrentVer").innerText = appUpdateInfo.current_version || "v1.0.0";
+        document.getElementById("updateModalCurrentVer").innerText = appUpdateInfo.current_version || "v1.0.1";
         document.getElementById("updateModalLatestVer").innerText = appUpdateInfo.latest_version || "-";
         document.getElementById("updateModalChangelog").innerText = appUpdateInfo.release_notes || "(Tidak ada catatan rilis khusus)";
         
         if (appUpdateInfo.asset_name) {
             document.getElementById("updateModalPackageName").innerText = appUpdateInfo.asset_name;
             const sizeMb = appUpdateInfo.asset_size ? (appUpdateInfo.asset_size / (1024 * 1024)).toFixed(1) + " MB" : "Rilis Resmi";
-            document.getElementById("updateModalPackageSize").innerText = `Paket Otomatis untuk Sistem Operasi Anda (${sizeMb})`;
+            document.getElementById("updateModalPackageSize").innerText = `Pembaruan Otomatis In-Place (${sizeMb})`;
         } else {
             document.getElementById("updateModalPackageName").innerText = `Smart TKA Scanner ${appUpdateInfo.latest_version}`;
-            document.getElementById("updateModalPackageSize").innerText = "Unduhan Halaman Rilis GitHub";
+            document.getElementById("updateModalPackageSize").innerText = "Pembaruan Otomatis Tanpa Timpa Data";
         }
 
         const downloadBtn = document.getElementById("updateModalDirectDownloadBtn");
@@ -2115,8 +2140,80 @@
         const ghLink = document.getElementById("updateModalGithubLink");
         ghLink.href = appUpdateInfo.html_url || "https://github.com/ardianryan/tka-tools/releases";
 
+        // Reset progress container
+        const progContainer = document.getElementById("autoUpdateProgressContainer");
+        if (progContainer) progContainer.classList.add("d-none");
+        const btn = document.getElementById("btnStartAutoUpdate");
+        if (btn) btn.disabled = false;
+
         const modal = new bootstrap.Modal(document.getElementById("modalAppUpdate"));
         modal.show();
+    }
+
+    async function startInAppUpdate() {
+        const btn = document.getElementById("btnStartAutoUpdate");
+        const progContainer = document.getElementById("autoUpdateProgressContainer");
+        const progBar = document.getElementById("autoUpdateProgressBar");
+        const statusText = document.getElementById("autoUpdateStatusText");
+        const percentText = document.getElementById("autoUpdatePercentText");
+
+        if (btn) btn.disabled = true;
+        if (progContainer) progContainer.classList.remove("d-none");
+
+        try {
+            const targetUrl = appUpdateInfo?.portable_url || appUpdateInfo?.download_url;
+            const targetVer = appUpdateInfo?.latest_version;
+            
+            const res = await fetch("/api/app/update_download", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ download_url: targetUrl, version: targetVer })
+            });
+            const data = await res.json();
+            if (!data.success) {
+                Swal.fire("Gagal", data.msg, "error");
+                if (btn) btn.disabled = false;
+                return;
+            }
+
+            // Poll progress
+            const pollInterval = setInterval(async () => {
+                try {
+                    const sRes = await fetch("/api/app/update_status");
+                    const sData = await sRes.json();
+                    
+                    const pct = sData.progress_percent || 0;
+                    if (progBar) progBar.style.width = pct + "%";
+                    if (percentText) percentText.innerText = pct + "%";
+                    if (statusText) statusText.innerText = sData.status_text || "Memproses...";
+
+                    if (sData.error) {
+                        clearInterval(pollInterval);
+                        Swal.fire("Gagal Pembaruan", sData.error, "error");
+                        if (btn) btn.disabled = false;
+                        return;
+                    }
+
+                    if (sData.is_applying || sData.ready_to_apply) {
+                        clearInterval(pollInterval);
+                        Swal.fire({
+                            icon: "success",
+                            title: "Pembaruan Berhasil Dipasang!",
+                            text: "Aplikasi akan otomatis menutup dan membuka kembali dalam beberapa detik.",
+                            showConfirmButton: false,
+                            timer: 6000
+                        });
+                    }
+                } catch (err) {
+                    // Application closed as it restarts with the new version
+                    clearInterval(pollInterval);
+                }
+            }, 700);
+
+        } catch (err) {
+            Swal.fire("Error", "" + err, "error");
+            if (btn) btn.disabled = false;
+        }
     }
 
     function dismissUpdateBanner() {

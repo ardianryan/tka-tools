@@ -253,12 +253,12 @@ class TKAClient:
         url = f"{self.base_url}/api/v2/absen/save"
         filename = Path(file_path).name
         
-        form_data = {k: str(v) for k, v in slot_data.items() if k not in ["filename_1", "status"]}
+        form_data = {k: str(v) for k, v in slot_data.items() if v is not None and k not in ["filename_1", "status"]}
         form_data["absen1"] = filename
         
         with open(file_path, "rb") as f:
             files = {
-                "absen1": (filename, f, "image/jpeg")
+                "absen1_file": (filename, f, "image/jpeg")
             }
             res = self._safe_request(
                 "POST",
@@ -278,12 +278,12 @@ class TKAClient:
         url = f"{self.base_url}/api/v2/pelaksanaan/upload"
         filename = Path(file_path).name
         
-        form_data = {k: str(v) for k, v in slot_data.items() if k not in ["filename", "status"]}
+        form_data = {k: str(v) for k, v in slot_data.items() if v is not None and k not in ["filename", "status"]}
         form_data["gambar"] = filename
         
         with open(file_path, "rb") as f:
             files = {
-                "gambar": (filename, f, "image/jpeg")
+                "gambar_file": (filename, f, "image/jpeg")
             }
             res = self._safe_request(
                 "POST",
