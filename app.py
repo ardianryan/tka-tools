@@ -1,5 +1,6 @@
 import os
 import json
+import base64
 import shutil
 import asyncio
 import logging
@@ -422,6 +423,7 @@ def api_status():
     return jsonify({
         "scanner": scanner_stat,
         "portal_connected": tka_client.is_authenticated,
+        "require_captcha": tka_client.require_captcha,
         "username": tka_client.username,
         "total_slots": total_slots,
         "bap_uploaded": bap_uploaded,
@@ -462,15 +464,69 @@ def api_settings():
 def api_scanner_devices():
     return jsonify({"devices": scanner.list_devices()})
 
+@app.route("/api/portal/captcha")
+def api_portal_captcha():
+    img_bytes = tka_client.get_captcha_image()
+    if img_bytes:
+        b64 = base64.b64encode(img_bytes).decode("ascii")
+        return jsonify({"success": True, "image": f"data:image/png;base64,{b64}"})
+    return jsonify({"success": False, "msg": "Gagal mengambil kode keamanan dari portal."}), 500
+
+@app.route("/api/portal/login", methods=["POST"])
+def api_portal_login():
+    data = request.get_json(silent=True) or {}
+    username = (data.get("username") or tka_client.username or "").strip()
+    password = (data.get("password") or tka_client.password or "").strip()
+    base_url = (data.get("base_url") or tka_client.base_url or "").rstrip("/")
+    secure = (data.get("secure") or "").strip()
+
+    tka_client.base_url = base_url
+    ok = tka_client.login(username=username, password=password, secure=secure)
+    if ok:
+        settings = load_settings()
+        settings["portal"]["username"] = username
+        settings["portal"]["password"] = password
+        settings["portal"]["base_url"] = base_url
+        save_settings(settings)
+        threading.Thread(target=sync_portal_slots, daemon=True).start()
+        return jsonify({"success": True, "msg": "Berhasil terhubung ke Portal TKA!"})
+    else:
+        img_bytes = tka_client.get_captcha_image() if tka_client.require_captcha else b""
+        b64 = base64.b64encode(img_bytes).decode("ascii") if img_bytes else ""
+        return jsonify({
+            "success": False,
+            "require_captcha": tka_client.require_captcha,
+            "image": f"data:image/png;base64,{b64}" if b64 else "",
+            "msg": tka_client.last_login_msg or "Gagal login ke portal."
+        })
+
 @app.route("/api/portal/test", methods=["POST"])
 def api_portal_test():
     data = request.get_json(silent=True) or {}
-    username = data.get("username") or tka_client.username
-    password = data.get("password") or tka_client.password
-    base_url = data.get("base_url") or tka_client.base_url
+    username = (data.get("username") or tka_client.username or "").strip()
+    password = (data.get("password") or tka_client.password or "").strip()
+    base_url = (data.get("base_url") or tka_client.base_url or "").rstrip("/")
+    secure = (data.get("secure") or "").strip()
+
     client = TKAClient(username=username, password=password, base_url=base_url)
-    ok = client.login()
-    return jsonify({"success": ok, "msg": "Koneksi portal berhasil!" if ok else "Gagal login ke portal. Periksa username dan password."})
+    ok = client.login(secure=secure)
+    if ok:
+        # Also sync current tka_client session
+        tka_client.session.cookies.update(client.session.cookies)
+        tka_client.csrf_token = client.csrf_token
+        tka_client.is_authenticated = True
+        tka_client.save_session()
+        threading.Thread(target=sync_portal_slots, daemon=True).start()
+        return jsonify({"success": True, "msg": "Koneksi portal berhasil!"})
+    else:
+        img_bytes = client.get_captcha_image() if client.require_captcha else b""
+        b64 = base64.b64encode(img_bytes).decode("ascii") if img_bytes else ""
+        return jsonify({
+            "success": False,
+            "require_captcha": client.require_captcha,
+            "image": f"data:image/png;base64,{b64}" if b64 else "",
+            "msg": client.last_login_msg or "Gagal login ke portal. Periksa username dan password."
+        })
 
 @app.route("/api/sync", methods=["POST"])
 def api_sync():
@@ -677,6 +733,13 @@ def api_upload_slot():
 def api_upload_start():
     if upload_state["is_running"]:
         return jsonify({"success": False, "msg": "Proses antrean unggah sedang berjalan."}), 400
+
+    if not tka_client.is_authenticated and not tka_client.verify_session():
+        return jsonify({
+            "success": False,
+            "require_captcha": True,
+            "msg": "Sesi portal belum terhubung atau memerlukan kode keamanan (CAPTCHA). Silakan periksa status koneksi di pengaturan."
+        }), 400
 
     ready_items = [q for q in queue if q["status"] in ["READY", "FAILED"]]
     if not ready_items:

@@ -31,6 +31,9 @@ logs/*.jsonl
 .env
 settings.json
 !settings.example.json
+.tka_session.json
+valid_session.json
+test_session_cookies.json
 
 # Windows Shortcuts & OS Temp
 *.lnk

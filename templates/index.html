@@ -933,9 +933,20 @@
                                 <option value="SD">SD / MI</option>
                             </select>
                         </div>
+                        <div id="cfgPortalCaptchaGroup" class="mb-3 d-none p-3 rounded bg-light border border-primary border-opacity-25">
+                            <label class="form-label small fw-bold text-primary mb-1"><i class="fa-solid fa-shield-halved me-1"></i> Verifikasi Kode Keamanan (CAPTCHA):</label>
+                            <div class="d-flex align-items-center gap-2 mb-1">
+                                <img id="cfgPortalCaptchaImg" src="" alt="Captcha" style="height: 42px; border-radius: 6px; border: 1px solid #cbd5e1; background: #fff;">
+                                <button type="button" class="btn btn-outline-secondary btn-sm" onclick="reloadPortalCaptcha('cfg')" title="Muat Ulang Gambar">
+                                    <i class="fa-solid fa-rotate-right"></i>
+                                </button>
+                                <input type="text" class="form-control form-control-sm font-mono text-uppercase fw-bold" id="cfgPortalSecure" placeholder="Ketik kode" maxlength="10" style="max-width: 160px;">
+                            </div>
+                            <div class="form-text small text-muted" style="font-size: 0.72rem;">Portal TKA meminta verifikasi keamanan. Ketik karakter pada gambar di atas.</div>
+                        </div>
                         <div class="text-end">
-                            <button type="button" class="btn btn-outline-secondary btn-sm" onclick="testPortalSettings()">
-                                Uji Koneksi Portal
+                            <button type="button" class="btn btn-outline-primary btn-sm" id="btnTestPortal" onclick="testPortalSettings()">
+                                <i class="fa-solid fa-plug me-1"></i> Uji Koneksi & Login
                             </button>
                         </div>
                     </div>
@@ -1127,6 +1138,18 @@
                             </select>
                         </div>
 
+                        <div id="setupPortalCaptchaGroup" class="mb-3 d-none p-3 rounded bg-light border border-primary border-opacity-25">
+                            <label class="form-label small fw-bold text-primary mb-1"><i class="fa-solid fa-shield-halved me-1"></i> Verifikasi Kode Keamanan (CAPTCHA):</label>
+                            <div class="d-flex align-items-center gap-2 mb-1">
+                                <img id="setupPortalCaptchaImg" src="" alt="Captcha" style="height: 42px; border-radius: 6px; border: 1px solid #cbd5e1; background: #fff;">
+                                <button type="button" class="btn btn-outline-secondary btn-sm" onclick="reloadPortalCaptcha('setup')" title="Muat Ulang Gambar">
+                                    <i class="fa-solid fa-rotate-right"></i>
+                                </button>
+                                <input type="text" class="form-control form-control-sm font-mono text-uppercase fw-bold" id="setupPortalSecure" placeholder="Ketik kode" maxlength="10" style="max-width: 160px;">
+                            </div>
+                            <div class="form-text small text-muted" style="font-size: 0.72rem;">Portal TKA meminta verifikasi captcha. Ketik karakter pada gambar di atas.</div>
+                        </div>
+
                         <button type="button" class="btn btn-outline-primary btn-sm w-100" id="btnSetupTestPortal" onclick="testSetupPortalConnection()">
                             <i class="fa-solid fa-plug me-1" id="iconSetupTest"></i> Uji Koneksi & Login
                         </button>
@@ -1261,6 +1284,18 @@
                 sc.innerHTML = `<span class="status-dot"></span> <span id="scannerDeviceName">${devName}</span>`;
             } else {
                 sc.innerHTML = `<span class="status-dot offline"></span> Tidak Terhubung`;
+            }
+
+            // Portal Telemetry
+            const sp = document.getElementById("sidePortalStatus");
+            if (sp) {
+                if (data.portal_connected) {
+                    sp.className = "font-mono text-success";
+                    sp.innerHTML = '<span class="status-dot"></span> Online';
+                } else {
+                    sp.className = "font-mono text-danger";
+                    sp.innerHTML = '<span class="status-dot offline"></span> Terputus <a href="javascript:void(0)" onclick="openScannerSettings(2)" class="text-danger fw-bold ms-1" title="Login / Verifikasi Captcha">[Masuk]</a>';
+                }
             }
 
             // Stats
@@ -1729,6 +1764,9 @@
                     document.getElementById("uploadProgressCard").style.display = "block";
                     startUploadPolling();
                 } else {
+                    if (data.require_captcha) {
+                        openScannerSettings(2);
+                    }
                     Swal.fire('Peringatan', data.msg, 'warning');
                 }
             } catch (err) {
@@ -1934,7 +1972,7 @@
         refreshStatus();
     }
 
-    async function openScannerSettings() {
+    async function openScannerSettings(tabIndex = 1) {
         try {
             const res = await fetch("/api/settings");
             const data = await res.json();
@@ -1964,7 +2002,14 @@
             document.getElementById("cfgDateDayMap").value = JSON.stringify(r.date_day_map || {"26": 1, "27": 2, "28": 3, "29": 4});
             document.getElementById("cfgServerPrefix").value = r.server_prefix || "";
 
-            new bootstrap.Modal(document.getElementById("settingsModal")).show();
+            const modal = new bootstrap.Modal(document.getElementById("settingsModal"));
+            modal.show();
+
+            if (tabIndex === 2) {
+                const btnPortal = document.querySelector('button[data-bs-target="#tab-portal"]');
+                if (btnPortal) bootstrap.Tab.getOrCreateInstance(btnPortal).show();
+                reloadPortalCaptcha('cfg');
+            }
         } catch (err) {
             Swal.fire('Error', 'Gagal memuat pengaturan: ' + err, 'error');
         }
@@ -2016,25 +2061,77 @@
         }
     }
 
+    async function reloadPortalCaptcha(target = 'cfg') {
+        try {
+            const res = await fetch("/api/portal/captcha");
+            const data = await res.json();
+            if (data.success && data.image) {
+                if (target === 'cfg' || target === 'all') {
+                    const img = document.getElementById("cfgPortalCaptchaImg");
+                    if (img) img.src = data.image;
+                    const sec = document.getElementById("cfgPortalSecure");
+                    if (sec) sec.value = "";
+                }
+                if (target === 'setup' || target === 'all') {
+                    const img = document.getElementById("setupPortalCaptchaImg");
+                    if (img) img.src = data.image;
+                    const sec = document.getElementById("setupPortalSecure");
+                    if (sec) sec.value = "";
+                }
+            }
+        } catch (e) {
+            console.error("Failed to reload captcha:", e);
+        }
+    }
+
     async function testPortalSettings() {
+        const capGroup = document.getElementById("cfgPortalCaptchaGroup");
+        const capImg = document.getElementById("cfgPortalCaptchaImg");
+        const capSec = document.getElementById("cfgPortalSecure");
+
         Swal.fire({
-            title: 'Menguji Koneksi...',
+            title: 'Menguji Koneksi & Login...',
+            allowOutsideClick: false,
             didOpen: () => Swal.showLoading()
         });
+
         try {
-            const res = await fetch("/api/portal/test", {
+            const res = await fetch("/api/portal/login", {
                 method: "POST",
                 headers: {"Content-Type": "application/json"},
                 body: JSON.stringify({
                     base_url: document.getElementById("cfgPortalUrl").value.trim(),
                     username: document.getElementById("cfgPortalUser").value.trim(),
-                    password: document.getElementById("cfgPortalPass").value.trim()
+                    password: document.getElementById("cfgPortalPass").value.trim(),
+                    secure: capSec ? capSec.value.trim() : ""
                 })
             });
             const data = await res.json();
-            Swal.fire(data.success ? 'Sukses' : 'Gagal', data.msg, data.success ? 'success' : 'error');
+            if (data.success) {
+                if (capGroup) capGroup.classList.add("d-none");
+                if (capSec) capSec.value = "";
+                Swal.fire({
+                    icon: 'success',
+                    title: 'Berhasil Terhubung!',
+                    text: data.msg || 'Login ke Portal TKA sukses dan jadwal telah disinkronkan.'
+                });
+                refreshStatus();
+            } else if (data.require_captcha) {
+                if (capGroup) {
+                    capGroup.classList.remove("d-none");
+                    if (data.image && capImg) capImg.src = data.image;
+                    if (capSec) capSec.focus();
+                }
+                Swal.fire({
+                    icon: 'warning',
+                    title: 'Kode Keamanan (CAPTCHA)',
+                    text: 'Portal TKA meminta verifikasi kode keamanan. Silakan ketik karakter yang tampil pada gambar captcha di bawah, lalu klik Uji Koneksi & Login kembali.'
+                });
+            } else {
+                Swal.fire('Gagal Login', data.msg || 'Periksa username dan password Anda.', 'error');
+            }
         } catch (err) {
-            Swal.fire('Error', '' + err, 'error');
+            Swal.fire('Kesalahan Jaringan', '' + err, 'error');
         }
     }
 
@@ -2348,6 +2445,9 @@
         const user = document.getElementById("setupPortalUser").value.trim();
         const pass = document.getElementById("setupPortalPass").value.trim();
         const url = document.getElementById("setupPortalUrl").value.trim();
+        const capGroup = document.getElementById("setupPortalCaptchaGroup");
+        const capImg = document.getElementById("setupPortalCaptchaImg");
+        const capSec = document.getElementById("setupPortalSecure");
 
         if (!user || !pass) {
             fb.className = "mt-2 text-center small text-danger";
@@ -2359,23 +2459,35 @@
         btn.disabled = true;
         if (icon) icon.className = "fa-solid fa-spinner fa-spin me-1";
         fb.className = "mt-2 text-center small text-secondary";
-        fb.innerHTML = 'Menguji koneksi ke portal TKA...';
+        fb.innerHTML = 'Menguji koneksi & login ke portal TKA...';
         fb.classList.remove("d-none");
 
         try {
-            const res = await fetch("/api/portal/test", {
+            const res = await fetch("/api/portal/login", {
                 method: "POST",
                 headers: {"Content-Type": "application/json"},
                 body: JSON.stringify({
                     base_url: url,
                     username: user,
-                    password: pass
+                    password: pass,
+                    secure: capSec ? capSec.value.trim() : ""
                 })
             });
             const data = await res.json();
             if (data.success) {
+                if (capGroup) capGroup.classList.add("d-none");
+                if (capSec) capSec.value = "";
                 fb.className = "mt-2 text-center small text-success fw-bold";
-                fb.innerHTML = '<i class="fa-solid fa-circle-check me-1"></i> Terhubung! Login Berhasil.';
+                fb.innerHTML = '<i class="fa-solid fa-circle-check me-1"></i> Terhubung! Login Berhasil & Jadwal Tersinkron.';
+                refreshStatus();
+            } else if (data.require_captcha) {
+                if (capGroup) {
+                    capGroup.classList.remove("d-none");
+                    if (data.image && capImg) capImg.src = data.image;
+                    if (capSec) capSec.focus();
+                }
+                fb.className = "mt-2 text-center small text-warning fw-bold";
+                fb.innerHTML = '<i class="fa-solid fa-shield-halved me-1"></i> Masukkan kode keamanan (CAPTCHA) di atas lalu klik Uji Koneksi lagi.';
             } else {
                 fb.className = "mt-2 text-center small text-danger fw-bold";
                 fb.innerHTML = `<i class="fa-solid fa-circle-xmark me-1"></i> ${data.msg || 'Gagal login ke portal.'}`;

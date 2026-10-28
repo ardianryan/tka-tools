@@ -1,3 +1,4 @@
+import json
 import logging
 import random
 import re
@@ -9,7 +10,7 @@ import requests
 from requests.adapters import HTTPAdapter
 from urllib3.util import Retry
 
-from config import TKA_BASE_URL, TKA_USERNAME, TKA_PASSWORD, TKA_KD_UJIAN
+from config import BASE_DIR, TKA_BASE_URL, TKA_USERNAME, TKA_PASSWORD, TKA_KD_UJIAN
 
 # Force IPv4 on Windows to prevent IPv6 NAT64 connection resets
 _orig_getaddrinfo = socket.getaddrinfo
@@ -20,6 +21,7 @@ def _ipv4_getaddrinfo(host, port, family=0, type=0, proto=0, flags=0):
 socket.getaddrinfo = _ipv4_getaddrinfo
 
 logger = logging.getLogger("TKAClient")
+SESSION_FILE = BASE_DIR / ".tka_session.json"
 
 class TKAClient:
     def __init__(self, username=TKA_USERNAME, password=TKA_PASSWORD, base_url=TKA_BASE_URL):
@@ -27,10 +29,15 @@ class TKAClient:
         self.password = password
         self.base_url = (base_url or TKA_BASE_URL).rstrip("/")
         self.is_authenticated = False
+        self.require_captcha = False
+        self.last_login_msg = ""
         self.session = None
         self.csrf_token = None
         self.user_kode = {}
         self._init_session()
+        # Restore active persistent session if available
+        if self.username:
+            self.load_session()
 
     def _init_session(self):
         """Initializes a new requests Session with retries and browser headers"""
@@ -59,6 +66,69 @@ class TKAClient:
         self.csrf_token = None
         self._parse_user_kode()
 
+    def save_session(self):
+        """Persists active session cookies and CSRF token to survive app restarts"""
+        try:
+            data = {
+                "username": self.username,
+                "cookies": self.session.cookies.get_dict(),
+                "csrf_token": self.csrf_token,
+                "saved_at": time.time()
+            }
+            with open(SESSION_FILE, "w", encoding="utf-8") as f:
+                json.dump(data, f)
+            logger.info("TKA session cookies saved to disk (%s)", SESSION_FILE.name)
+        except Exception as e:
+            logger.debug("Failed saving TKA session: %s", e)
+
+    def load_session(self) -> bool:
+        """Loads and verifies existing persistent session from disk"""
+        try:
+            if not SESSION_FILE.exists():
+                return False
+            with open(SESSION_FILE, "r", encoding="utf-8") as f:
+                data = json.load(f)
+            if data.get("username") and self.username and data.get("username") != self.username:
+                return False
+            cookies = data.get("cookies", {})
+            if cookies:
+                self.session.cookies.update(cookies)
+                self.csrf_token = data.get("csrf_token")
+                return self.verify_session()
+        except Exception as e:
+            logger.debug("Failed loading saved session: %s", e)
+        return False
+
+    def verify_session(self) -> bool:
+        """Checks if current session is authenticated without triggering captcha"""
+        try:
+            home_url = f"{self.base_url}/user/home"
+            res = self.session.get(home_url, timeout=15)
+            if res.status_code == 200 and "/login" not in res.url:
+                m = re.search(r'csrfToken\s*=\s*[\'"]([^\'"]+)[\'"]', res.text)
+                if m:
+                    self.csrf_token = m.group(1)
+                self.is_authenticated = True
+                self.require_captcha = False
+                logger.info("Active TKA session verified and restored for %s (CSRF: %s...)", self.username, (self.csrf_token or "")[:10])
+                return True
+        except Exception as e:
+            logger.debug("Session verification failed: %s", e)
+        self.is_authenticated = False
+        return False
+
+    def get_captcha_image(self) -> bytes:
+        """Fetches fresh captcha image from /login/secure?sid=... using current session"""
+        try:
+            if not self.session.cookies:
+                self.session.get(f"{self.base_url}/", timeout=15)
+            r = self.session.get(f"{self.base_url}/login/secure?sid={random.random()}", timeout=15)
+            if r.status_code == 200:
+                return r.content
+        except Exception as e:
+            logger.error("Failed fetching captcha image: %s", e)
+        return b""
+
     def _parse_user_kode(self):
         """Extracts kd_jenjang, kd_prop, kd_kota, kd_sek from school username (e.g. U05120005)"""
         u = (self.username or "").strip()
@@ -78,48 +148,68 @@ class TKAClient:
         rand_str = ''.join(random.choices(string.ascii_lowercase + string.digits, k=8))
         return f"{t}-{rand_str}"
 
-    def login(self) -> bool:
+    def login(self, username=None, password=None, secure="") -> bool:
         """Performs authentication with portal TKA and captures active CSRF token from /user/home"""
+        if username:
+            self.username = username
+            self._parse_user_kode()
+        if password:
+            self.password = password
+
         try:
-            self._init_session()
             # 1. Warm-up session
-            self.session.get(f"{self.base_url}/", timeout=15)
+            if not self.session.cookies:
+                self.session.get(f"{self.base_url}/", timeout=15)
             
             # 2. Post login
             login_url = f"{self.base_url}/api/v1/login"
             payload = {
                 "username": self.username,
                 "password": self.password,
-                "secure": ""
+                "secure": secure or ""
             }
             res = self.session.post(login_url, data=payload, headers={"X-Requested-With": "XMLHttpRequest"}, timeout=20)
             data = res.json()
             if not data.get("login"):
                 self.is_authenticated = False
-                logger.error("Login failed: %s", data.get("msg"))
+                self.last_login_msg = data.get("msg", "Login gagal")
+                if data.get("showSecure") or "keamanan" in self.last_login_msg.lower():
+                    self.require_captcha = True
+                    logger.warning("TKA Portal requires captcha challenge: %s", self.last_login_msg)
+                else:
+                    self.require_captcha = False
+                    logger.error("Login failed: %s", self.last_login_msg)
                 return False
 
             # 3. Standard browser page navigation to /user/home to capture active CSRF token
             home_url = f"{self.base_url}/user/home"
             home_res = self.session.get(home_url, timeout=20)
             if home_res.status_code == 200:
-                match = re.search(r"var\s+csrfToken\s*=\s*'([^']+)'", home_res.text)
+                match = re.search(r'csrfToken\s*=\s*[\'"]([^\'"]+)[\'"]', home_res.text)
                 if match:
                     self.csrf_token = match.group(1)
                     logger.info("Captured CSRF token for session: %s...", self.csrf_token[:10])
 
             self.is_authenticated = True
+            self.require_captcha = False
+            self.last_login_msg = "Login berhasil"
+            self.save_session()
             logger.info("Successfully authenticated with TKA Portal as %s", self.username)
             return True
         except Exception as e:
             self.is_authenticated = False
+            self.require_captcha = False
+            self.last_login_msg = str(e)
             logger.error("Login exception: %s", str(e))
             return False
 
     def ensure_authenticated(self):
         if not self.is_authenticated:
-            if not self.login():
-                raise ConnectionError("Gagal login ke portal TKA Kemendikdasmen.")
+            if not self.verify_session():
+                if not self.login():
+                    if self.require_captcha:
+                        raise ConnectionError("Portal TKA memerlukan kode keamanan (CAPTCHA). Silakan buka antarmuka dan masukkan kode keamanan.")
+                    raise ConnectionError(f"Gagal login ke portal TKA Kemendikdasmen: {self.last_login_msg}")
 
     def _safe_request(self, method: str, url: str, **kwargs) -> requests.Response:
         """
