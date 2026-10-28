@@ -18,6 +18,10 @@ Format berkas ini mengacu pada [Keep a Changelog](https://keepachangelog.com/id/
   - Endpoint baru `/api/portal/captcha` dan `/api/portal/login` yang mendukung transmisi kode keamanan langsung dari UI.
 
 ### Ditambahkan (Added)
+- **Penyelarasan Tema Scrollbar Modern (Sleek Theme Scrollbars)**:
+  - Menggantikan scrollbar default Windows abu-abu terang yang kaku dengan scrollbar ramping (*thin* 5-6px), sudut melengkung halus, dan transparansi adaptif.
+  - Sidebar dan terminal log gelap (`#uploadLogTerminal`, `.bg-dark`) kini menggunakan scrollbar putih transparan semi-matte yang senada dengan latar navy gelap.
+  - Tabel antrean, riwayat unggah, dan modal preview menggunakan scrollbar slate halus yang menyatu dengan tema terang aplikasi.
 - **Penghapusan Aman Berkas Scan Saat Kosongkan Antrean**:
   - Dialog konfirmasi cerdas saat mengosongkan antrean: memeriksa status berkas dan membedakan antara berkas yang sudah terunggah (`UPLOADED`) vs berkas tertunda (`READY`, `FAILED`, `NEEDS_REVIEW`).
   - Peringatan eksplisit risiko kehilangan berkas asli jika scanner menyimpan hasil pemindaian langsung ke direktori `inbox/`.

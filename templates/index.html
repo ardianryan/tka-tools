@@ -42,6 +42,72 @@
             font-size: 0.925rem;
         }
 
+        /* Modern Sleek Scrollbars */
+        * {
+            scrollbar-width: thin;
+            scrollbar-color: rgba(148, 163, 184, 0.35) transparent;
+        }
+
+        ::-webkit-scrollbar {
+            width: 6px;
+            height: 6px;
+        }
+
+        ::-webkit-scrollbar-track {
+            background: transparent;
+        }
+
+        ::-webkit-scrollbar-thumb {
+            background: rgba(148, 163, 184, 0.3);
+            border-radius: 9999px;
+            transition: background 0.2s ease;
+        }
+
+        ::-webkit-scrollbar-thumb:hover {
+            background: rgba(100, 116, 139, 0.55);
+        }
+
+        ::-webkit-scrollbar-corner {
+            background: transparent;
+        }
+
+        /* Dark Theme Scrollbar for Sidebar and Dark Terminals */
+        #sidebar, .sidebar-menu, #uploadLogTerminal, .bg-dark {
+            scrollbar-width: thin;
+            scrollbar-color: rgba(255, 255, 255, 0.16) transparent;
+        }
+
+        #sidebar::-webkit-scrollbar,
+        .sidebar-menu::-webkit-scrollbar,
+        #uploadLogTerminal::-webkit-scrollbar,
+        .bg-dark::-webkit-scrollbar {
+            width: 5px;
+            height: 5px;
+        }
+
+        #sidebar::-webkit-scrollbar-track,
+        .sidebar-menu::-webkit-scrollbar-track,
+        #uploadLogTerminal::-webkit-scrollbar-track,
+        .bg-dark::-webkit-scrollbar-track {
+            background: transparent;
+        }
+
+        #sidebar::-webkit-scrollbar-thumb,
+        .sidebar-menu::-webkit-scrollbar-thumb,
+        #uploadLogTerminal::-webkit-scrollbar-thumb,
+        .bg-dark::-webkit-scrollbar-thumb {
+            background: rgba(255, 255, 255, 0.16);
+            border-radius: 9999px;
+            transition: background 0.2s ease;
+        }
+
+        #sidebar::-webkit-scrollbar-thumb:hover,
+        .sidebar-menu::-webkit-scrollbar-thumb:hover,
+        #uploadLogTerminal::-webkit-scrollbar-thumb:hover,
+        .bg-dark::-webkit-scrollbar-thumb:hover {
+            background: rgba(255, 255, 255, 0.35);
+        }
+
         /* Layout Structure */
         #app-layout {
             display: flex;
