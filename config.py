@@ -23,7 +23,7 @@ if env_file.exists():
                 os.environ.setdefault(k.strip(), v.strip())
 
 # Application Metadata & GitHub Repository for Updates
-APP_VERSION = os.getenv("APP_VERSION", "v1.0.0")
+APP_VERSION = os.getenv("APP_VERSION", "v1.0.1")
 GITHUB_REPO = os.getenv("GITHUB_REPO", "ardianryan/tka-tools")
 
 # TKA Portal Credentials (Default kosong untuk keamanan open-source, atur via settings.json atau Dashboard)

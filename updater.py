@@ -6,6 +6,7 @@ import socket
 import logging
 import threading
 import urllib.request
+import urllib.error
 from typing import Dict, Any, Optional
 from config import APP_VERSION, GITHUB_REPO
 
@@ -45,11 +46,12 @@ def detect_platform_asset(assets: list) -> Optional[Dict[str, Any]]:
     current_os = sys.platform
     keywords = []
     if current_os.startswith("win"):
-        keywords = ["windows", "win-x64", "win64", ".zip", ".exe"]
+        # Prioritize Windows Setup installer or zip
+        keywords = ["setup", "windows", "win-x64", "win64", ".exe", ".zip"]
     elif current_os.startswith("linux"):
         keywords = ["linux", "tar.gz", ".deb", ".rpm"]
     elif current_os == "darwin":
-        keywords = ["macos", "darwin", "osx", ".zip", ".dmg"]
+        keywords = ["macos", "darwin", "osx", ".dmg", ".zip"]
     
     # Priority 1: Match OS keyword and primary binary extension
     for kw in keywords[:2]:
@@ -78,10 +80,57 @@ class UpdateChecker:
         self._lock = threading.Lock()
         self._is_checking = False
 
+    def _fetch_from_web_fallback(self, timeout: int = 8) -> Optional[Dict[str, Any]]:
+        """
+        Fallback parser that checks https://github.com/{repo}/releases/latest
+        and expanded_assets if the GitHub REST API hits rate limits (HTTP 403).
+        """
+        try:
+            latest_url = f"https://github.com/{self.repo}/releases/latest"
+            req = urllib.request.Request(
+                latest_url,
+                headers={"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"}
+            )
+            with urllib.request.urlopen(req, timeout=timeout) as resp:
+                final_url = resp.geturl()
+                tag = final_url.rstrip("/").split("/")[-1]
+                if not tag or tag == "releases":
+                    return None
+
+            # Fetch expanded assets list for this tag
+            assets_url = f"https://github.com/{self.repo}/releases/expanded_assets/{tag}"
+            req_assets = urllib.request.Request(
+                assets_url,
+                headers={"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"}
+            )
+            with urllib.request.urlopen(req_assets, timeout=timeout) as resp_assets:
+                html = resp_assets.read().decode("utf-8", errors="ignore")
+
+            matches = re.findall(rf'href="(/[^"]+/{re.escape(tag)}/([^"]+))"', html)
+            assets = []
+            for path, name in matches:
+                assets.append({
+                    "name": name,
+                    "browser_download_url": f"https://github.com{path}",
+                    "size": None
+                })
+
+            return {
+                "tag_name": tag,
+                "name": f"Smart TKA Scanner {tag}",
+                "body": f"Versi terbaru {tag} tersedia di GitHub Releases.",
+                "published_at": None,
+                "html_url": final_url,
+                "assets": assets
+            }
+        except Exception as e:
+            logger.debug("Web fallback release fetch failed: %s", e)
+            return None
+
     def check(self, force: bool = False, timeout: int = 5) -> Dict[str, Any]:
         """
-        Queries the GitHub API for the latest release.
-        Uses in-memory cache if checked recently, unless force=True.
+        Queries the GitHub API for the latest release, with automatic web fallback
+        if rate limited. Uses in-memory cache if checked recently, unless force=True.
         """
         now = time.time()
         with self._lock:
@@ -97,23 +146,36 @@ class UpdateChecker:
             }
         )
 
-        # Force IPv4 resolution for api.github.com to circumvent Windows NAT64 connection resets (WinError 10054)
         orig_getaddrinfo = socket.getaddrinfo
         def safe_getaddrinfo(host, port, family=0, socktype=0, proto=0, flags=0):
-            if host == "api.github.com":
+            if host in ["api.github.com", "github.com"]:
                 family = socket.AF_INET
             return orig_getaddrinfo(host, port, family, socktype, proto, flags)
+
+        data = None
+        error_msg = None
 
         try:
             socket.getaddrinfo = safe_getaddrinfo
             with urllib.request.urlopen(req, timeout=timeout) as resp:
                 data = json.loads(resp.read().decode("utf-8"))
+        except urllib.error.HTTPError as e:
+            if e.code == 403:
+                logger.info("GitHub API rate limited (403), falling back to public web scraper...")
+                data = self._fetch_from_web_fallback(timeout=timeout + 3)
+            if not data:
+                error_msg = f"HTTP Error {e.code}: {e.reason}"
         except Exception as e:
-            logger.warning("Update check failed for %s: %s", self.repo, e)
             error_msg = str(e)
-            if "WinError 10054" in error_msg:
+            logger.info("GitHub API check failed (%s), attempting web fallback...", error_msg)
+            data = self._fetch_from_web_fallback(timeout=timeout + 3)
+        finally:
+            socket.getaddrinfo = orig_getaddrinfo
+
+        if not data:
+            if "WinError 10054" in str(error_msg):
                 error_msg = "Koneksi jaringan terputus (WinError 10054)."
-            elif "timed out" in error_msg.lower():
+            elif "timed out" in str(error_msg).lower():
                 error_msg = "Waktu koneksi habis (timeout)."
 
             result = {
@@ -132,13 +194,10 @@ class UpdateChecker:
                 "checked_at": now
             }
             with self._lock:
-                # Cache failure briefly for 60 seconds to avoid repeating failed network calls
                 if not self._cache:
                     self._cache = result
                     self._last_checked = now
             return result
-        finally:
-            socket.getaddrinfo = orig_getaddrinfo
 
         latest_tag = data.get("tag_name", "").strip()
         has_update = is_newer_version(latest_tag, self.current_version) if latest_tag else False

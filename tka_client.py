@@ -1,6 +1,10 @@
 import logging
+import random
+import re
 import socket
+import string
 import time
+from pathlib import Path
 import requests
 from requests.adapters import HTTPAdapter
 from urllib3.util import Retry
@@ -21,13 +25,15 @@ class TKAClient:
     def __init__(self, username=TKA_USERNAME, password=TKA_PASSWORD, base_url=TKA_BASE_URL):
         self.username = username
         self.password = password
-        self.base_url = base_url.rstrip("/")
+        self.base_url = (base_url or TKA_BASE_URL).rstrip("/")
         self.is_authenticated = False
         self.session = None
+        self.csrf_token = None
+        self.user_kode = {}
         self._init_session()
 
     def _init_session(self):
-        """Initializes a new requests Session with retries and connection management"""
+        """Initializes a new requests Session with retries and browser headers"""
         if self.session:
             try:
                 self.session.close()
@@ -47,13 +53,33 @@ class TKAClient:
         self.session.mount("http://", adapter)
         self.session.headers.update({
             "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
-            "X-Requested-With": "XMLHttpRequest",
             "Referer": f"{self.base_url}/"
         })
         self.is_authenticated = False
+        self.csrf_token = None
+        self._parse_user_kode()
+
+    def _parse_user_kode(self):
+        """Extracts kd_jenjang, kd_prop, kd_kota, kd_sek from school username (e.g. U05120005)"""
+        u = (self.username or "").strip()
+        if len(u) >= 9:
+            self.user_kode = {
+                "kd_jenjang": u[0],
+                "kd_prop": u[1:3],
+                "kd_kota": u[3:5],
+                "kd_sek": u[5:9]
+            }
+        else:
+            self.user_kode = {}
+
+    def _get_request_id(self) -> str:
+        """Generates a unique request ID per API call to prevent server replay rejection"""
+        t = hex(int(time.time() * 1000))[2:]
+        rand_str = ''.join(random.choices(string.ascii_lowercase + string.digits, k=8))
+        return f"{t}-{rand_str}"
 
     def login(self) -> bool:
-        """Performs authentication with portal TKA"""
+        """Performs authentication with portal TKA and captures active CSRF token from /user/home"""
         try:
             self._init_session()
             # 1. Warm-up session
@@ -66,16 +92,25 @@ class TKAClient:
                 "password": self.password,
                 "secure": ""
             }
-            res = self.session.post(login_url, data=payload, timeout=20)
+            res = self.session.post(login_url, data=payload, headers={"X-Requested-With": "XMLHttpRequest"}, timeout=20)
             data = res.json()
-            if data.get("login"):
-                self.is_authenticated = True
-                logger.info("Successfully authenticated with TKA Portal as %s", self.username)
-                return True
-            else:
+            if not data.get("login"):
                 self.is_authenticated = False
                 logger.error("Login failed: %s", data.get("msg"))
                 return False
+
+            # 3. Standard browser page navigation to /user/home to capture active CSRF token
+            home_url = f"{self.base_url}/user/home"
+            home_res = self.session.get(home_url, timeout=20)
+            if home_res.status_code == 200:
+                match = re.search(r"var\s+csrfToken\s*=\s*'([^']+)'", home_res.text)
+                if match:
+                    self.csrf_token = match.group(1)
+                    logger.info("Captured CSRF token for session: %s...", self.csrf_token[:10])
+
+            self.is_authenticated = True
+            logger.info("Successfully authenticated with TKA Portal as %s", self.username)
+            return True
         except Exception as e:
             self.is_authenticated = False
             logger.error("Login exception: %s", str(e))
@@ -88,7 +123,7 @@ class TKAClient:
 
     def _safe_request(self, method: str, url: str, **kwargs) -> requests.Response:
         """
-        Executes request with automatic re-login and reconnect if remote connection was terminated.
+        Executes request with anti-replay X-REQUEST-ID, CSRF headers, and automatic re-login.
         """
         max_attempts = 2
         last_error = None
@@ -98,11 +133,25 @@ class TKAClient:
                 self.ensure_authenticated()
                 if "timeout" not in kwargs:
                     kwargs["timeout"] = 25
+
+                # Setup anti-replay & CSRF headers
+                headers = kwargs.get("headers", {})
+                headers["X-Requested-With"] = "XMLHttpRequest"
+                headers["X-REQUEST-ID"] = self._get_request_id()
+                if self.csrf_token:
+                    headers["X-CSRF-TOKEN"] = self.csrf_token
+                kwargs["headers"] = headers
+
+                # Inject _csrf_token into form data if dict
+                if self.csrf_token and "data" in kwargs and isinstance(kwargs["data"], dict):
+                    kwargs["data"]["_csrf_token"] = self.csrf_token
+
                 res = self.session.request(method, url, **kwargs)
                 
-                # Check if server redirected to login or returned empty session
+                # Check if server redirected to login or returned CSRF/session error
                 if res.status_code in [401, 403] or "/login" in res.url:
-                    logger.warning("Session expired or unauthorized, re-authenticating...")
+                    last_error = f"HTTP {res.status_code}: {res.text[:200]}"
+                    logger.warning("Session expired or unauthorized (%s), re-authenticating...", last_error)
                     self.is_authenticated = False
                     self.login()
                     continue
@@ -117,43 +166,106 @@ class TKAClient:
 
         raise ConnectionError(f"Gagal menghubungi server TKA setelah beberapa percobaan: {last_error}")
 
-    def get_absen_slots(self, kd_ujian=TKA_KD_UJIAN):
-        url = f"{self.base_url}/api/v2/absen/getAll"
-        res = self._safe_request("POST", url, data={"kd_ujian": kd_ujian})
+    def get_ujian_list(self) -> list:
+        """Queries /api/v2/combo/ujian to discover available exam categories for this school"""
+        url = f"{self.base_url}/api/v2/combo/ujian"
+        payload = dict(self.user_kode) if self.user_kode else {}
         try:
+            res = self._safe_request(
+                "POST",
+                url,
+                data=payload,
+                headers={"Referer": f"{self.base_url}/user/pelaksanaan"}
+            )
             data = res.json()
-            return data.get("rows", [])
+            rows = data.get("rows", [])
+            return [r.get("key") for r in rows if r.get("key")]
         except Exception as e:
-            logger.error("Failed to parse absen JSON: %s (Content: %s)", str(e), res.text[:200])
+            logger.warning("Failed to fetch ujian combo list: %s", e)
             return []
 
-    def get_pelaksanaan_slots(self, kd_ujian=TKA_KD_UJIAN):
+    def get_pelaksanaan_slots(self, kd_ujian=None) -> list:
+        """Fetches pelaksanaan (BAP) slots from the portal with automatic school code parameters"""
         url = f"{self.base_url}/api/v2/pelaksanaan/getAll"
-        res = self._safe_request("POST", url, data={"kd_ujian": kd_ujian})
-        try:
-            data = res.json()
-            return data.get("rows", [])
-        except Exception as e:
-            logger.error("Failed to parse pelaksanaan JSON: %s (Content: %s)", str(e), res.text[:200])
-            return []
+        
+        keys = [kd_ujian] if kd_ujian else []
+        if not keys:
+            keys = self.get_ujian_list()
+        if not keys and self.user_kode.get("kd_jenjang"):
+            keys = [self.user_kode["kd_jenjang"]]
+        if not keys:
+            keys = [TKA_KD_UJIAN]
+
+        all_rows = []
+        for key in keys:
+            payload = dict(self.user_kode) if self.user_kode else {}
+            payload["kd_ujian"] = key
+            try:
+                res = self._safe_request(
+                    "POST",
+                    url,
+                    data=payload,
+                    headers={"Referer": f"{self.base_url}/user/pelaksanaan"}
+                )
+                data = res.json()
+                rows = data.get("rows", [])
+                if rows:
+                    all_rows.extend(rows)
+            except Exception as e:
+                logger.error("Failed to parse pelaksanaan JSON for ujian %s: %s", key, str(e))
+
+        return all_rows
+
+    def get_absen_slots(self, kd_ujian=None) -> list:
+        """Fetches absen (Daftar Hadir) slots from the portal with automatic school code parameters"""
+        url = f"{self.base_url}/api/v2/absen/getAll"
+        
+        keys = [kd_ujian] if kd_ujian else []
+        if not keys:
+            keys = self.get_ujian_list()
+        if not keys and self.user_kode.get("kd_jenjang"):
+            keys = [self.user_kode["kd_jenjang"]]
+        if not keys:
+            keys = [TKA_KD_UJIAN]
+
+        all_rows = []
+        for key in keys:
+            payload = dict(self.user_kode) if self.user_kode else {}
+            payload["kd_ujian"] = key
+            try:
+                res = self._safe_request(
+                    "POST",
+                    url,
+                    data=payload,
+                    headers={"Referer": f"{self.base_url}/user/absen"}
+                )
+                data = res.json()
+                rows = data.get("rows", [])
+                if rows:
+                    all_rows.extend(rows)
+            except Exception as e:
+                logger.error("Failed to parse absen JSON for ujian %s: %s", key, str(e))
+
+        return all_rows
 
     def upload_absen(self, slot_data: dict, file_path: str):
+        """Uploads scanned Daftar Hadir image to /api/v2/absen/save"""
         url = f"{self.base_url}/api/v2/absen/save"
-        filename = file_path.split("/")[-1].split("\\")[-1]
+        filename = Path(file_path).name
         
         form_data = {k: str(v) for k, v in slot_data.items() if k not in ["filename_1", "status"]}
         form_data["absen1"] = filename
         
         with open(file_path, "rb") as f:
             files = {
-                "absen1_file": (filename, f, "image/jpeg")
+                "absen1": (filename, f, "image/jpeg")
             }
             res = self._safe_request(
                 "POST",
                 url,
                 data=form_data,
                 files=files,
-                headers={"X-Requested-With": "XMLHttpRequest"},
+                headers={"Referer": f"{self.base_url}/user/absen"},
                 timeout=60
             )
             try:
@@ -162,22 +274,23 @@ class TKAClient:
                 return {"success": False, "msg": f"Server raw response ({res.status_code}): {res.text[:200]}"}
 
     def upload_pelaksanaan(self, slot_data: dict, file_path: str):
+        """Uploads scanned Berita Acara Pelaksanaan image to /api/v2/pelaksanaan/upload"""
         url = f"{self.base_url}/api/v2/pelaksanaan/upload"
-        filename = file_path.split("/")[-1].split("\\")[-1]
+        filename = Path(file_path).name
         
         form_data = {k: str(v) for k, v in slot_data.items() if k not in ["filename", "status"]}
         form_data["gambar"] = filename
         
         with open(file_path, "rb") as f:
             files = {
-                "gambar_file": (filename, f, "image/jpeg")
+                "gambar": (filename, f, "image/jpeg")
             }
             res = self._safe_request(
                 "POST",
                 url,
                 data=form_data,
                 files=files,
-                headers={"X-Requested-With": "XMLHttpRequest"},
+                headers={"Referer": f"{self.base_url}/user/pelaksanaan"},
                 timeout=60
             )
             try:

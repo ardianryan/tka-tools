@@ -190,20 +190,23 @@ def _run_upload_worker(delay_min=3.0, delay_max=5.0):
     except Exception:
         pass
 
+sync_lock = threading.Lock()
+
 def sync_portal_slots():
-    try:
-        bap = tka_client.get_pelaksanaan_slots(TKA_KD_UJIAN)
-        dh = tka_client.get_absen_slots(TKA_KD_UJIAN)
-        if not bap and not dh:
-            raise Exception("Portal mengembalikan data kosong atau gagal dihubungi.")
-        cached_slots["bap"] = bap
-        cached_slots["dh"] = dh
-        cached_slots["last_sync"] = True
-        logger.info("Synced portal slots: %d BAP, %d DH", len(bap), len(dh))
-        return True, f"Berhasil sinkronisasi {len(bap)} BAP & {len(dh)} Daftar Hadir."
-    except Exception as e:
-        logger.error("Failed to sync portal slots: %s", str(e))
-        return False, str(e)
+    with sync_lock:
+        try:
+            bap = tka_client.get_pelaksanaan_slots()
+            dh = tka_client.get_absen_slots()
+            if not bap and not dh:
+                raise Exception("Portal mengembalikan data kosong atau gagal dihubungi.")
+            cached_slots["bap"] = bap
+            cached_slots["dh"] = dh
+            cached_slots["last_sync"] = True
+            logger.info("Synced portal slots: %d BAP, %d DH", len(bap), len(dh))
+            return True, f"Berhasil sinkronisasi {len(bap)} BAP & {len(dh)} Daftar Hadir."
+        except Exception as e:
+            logger.error("Failed to sync portal slots: %s", str(e))
+            return False, str(e)
 
 def find_duplicate_in_queue(doc_type, hari, sesi, lab_num, kd_server, matched_slot, current_file_path, participants=None):
     """
@@ -429,9 +432,8 @@ def api_settings():
             tka_client.username = settings["portal"]["username"]
             tka_client.password = settings["portal"]["password"]
             tka_client.base_url = settings["portal"]["base_url"]
+            tka_client._parse_user_kode()
             tka_client.is_authenticated = False
-            if tka_client.username and tka_client.password:
-                threading.Thread(target=sync_portal_slots, daemon=True).start()
         if "ocr_rules" in data:
             settings["ocr_rules"].update(data["ocr_rules"])
         if "upload" in data:

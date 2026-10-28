@@ -10,6 +10,7 @@ dist/
 *.zip
 *.tar.gz
 *.exe
+powershell.cmd
 !static/*.ico
 
 # User Data & Storage (Protect school exam documents & student privacy)
