@@ -443,13 +443,8 @@
             </a>
 
             <a class="nav-sidebar-link" onclick="openScannerSettings()">
-                <i class="fa-solid fa-sliders" style="width: 18px;"></i>
-                <span>Pengaturan Scanner</span>
-            </a>
-
-            <a class="nav-sidebar-link text-warning" onclick="openFirstRunModal()" id="sideNavSetupWizard">
-                <i class="fa-solid fa-wand-magic-sparkles" style="width: 18px;"></i>
-                <span>Panduan Setup Awal</span>
+                <i class="fa-solid fa-gear" style="width: 18px;"></i>
+                <span>Pengaturan</span>
             </a>
         </div>
 
@@ -515,8 +510,8 @@
                         <div class="text-secondary" style="font-size: 0.75rem;">Masukkan username dan password akun proktor agar sistem dapat melakukan sinkronisasi jadwal sesi portal dan auto-upload.</div>
                     </div>
                 </div>
-                <button type="button" class="btn btn-warning btn-sm fw-semibold shadow-sm px-3" onclick="openFirstRunModal()">
-                    <i class="fa-solid fa-wand-magic-sparkles me-1"></i> Buka Setup Awal
+                <button type="button" class="btn btn-warning btn-sm fw-semibold shadow-sm px-3" onclick="openScannerSettings(2)">
+                    <i class="fa-solid fa-gear me-1"></i> Konfigurasi Sekarang
                 </button>
             </div>
 
@@ -1620,18 +1615,155 @@
     }
 
     async function clearQueue() {
-        const conf = await Swal.fire({
-            title: 'Kosongkan Antrean?',
-            text: 'Daftar berkas di antrean saat ini akan dibersihkan.',
-            icon: 'question',
-            showCancelButton: true,
-            confirmButtonText: 'Ya, Kosongkan',
-            cancelButtonText: 'Batal'
+        if (!currentQueue || currentQueue.length === 0) {
+            Swal.fire({
+                icon: 'info',
+                title: 'Antrean Kosong',
+                text: 'Tidak ada berkas di dalam antrean saat ini.',
+                timer: 1800,
+                showConfirmButton: false
+            });
+            return;
+        }
+
+        const uploadedItems = currentQueue.filter(q => q.status === 'UPLOADED');
+        const pendingItems = currentQueue.filter(q => q.status !== 'UPLOADED');
+
+        // Kasus 1: Semua berkas telah berhasil diunggah (pending === 0)
+        if (pendingItems.length === 0) {
+            const res = await Swal.fire({
+                title: 'Kosongkan Antrean & Berkas Scan?',
+                html: `
+                    <div class="text-start">
+                        <div class="mb-3 text-secondary">
+                            Seluruh <strong>${uploadedItems.length} berkas</strong> dalam antrean telah 
+                            <span class="badge bg-success-subtle text-success font-mono">100% TERUNGGAH</span> ke Portal TKA.
+                        </div>
+                        <div class="alert alert-warning small py-2 px-3 mb-0 border border-warning border-opacity-25 rounded-2">
+                            <i class="fa-solid fa-triangle-exclamation text-warning me-1"></i>
+                            <strong>Peringatan Berkas Fisik:</strong> Apabila scanner Anda dikonfigurasi menyimpan langsung ke folder <code>inbox</code>, memilih <em>"Hapus File Scan"</em> akan menghapus file fisik asli dari komputer secara permanen untuk menghemat ruang disk.
+                        </div>
+                    </div>
+                `,
+                icon: 'question',
+                showDenyButton: true,
+                showCancelButton: true,
+                confirmButtonText: '<i class="fa-solid fa-trash-can me-1"></i> Hapus File Scan & Kosongkan',
+                denyButtonText: '<i class="fa-solid fa-broom me-1"></i> Hanya Kosongkan Antrean',
+                cancelButtonText: 'Batal',
+                confirmButtonColor: '#dc2626',
+                denyButtonColor: '#475569',
+                cancelButtonColor: '#94a3b8'
+            });
+
+            if (res.isConfirmed) {
+                await executeClearQueue("uploaded_only");
+            } else if (res.isDenied) {
+                await executeClearQueue("none");
+            }
+            return;
+        }
+
+        // Kasus 2: Masih ada berkas yang BELUM terunggah (pending > 0)
+        let htmlPending = `
+            <div class="text-start">
+                <div class="mb-2 text-dark">
+                    Terdapat <strong class="text-danger">${pendingItems.length} berkas yang BELUM terunggah</strong> ke Portal TKA${uploadedItems.length > 0 ? ` (dan ${uploadedItems.length} berkas sudah terunggah)` : ''}.
+                </div>
+                <div class="alert alert-danger small py-2 px-3 mb-3 border border-danger border-opacity-25 rounded-2">
+                    <i class="fa-solid fa-triangle-exclamation text-danger me-1"></i>
+                    <strong>Peringatan Kehilangan Berkas:</strong> Jika perangkat scanner terhubung langsung ke direktori <code>inbox</code>, menghapus file fisik akan menyebabkan lembar dokumen ujian yang belum terunggah <strong>hilang permanen</strong>!
+                </div>
+                <div class="text-muted small">Pilih tindakan yang ingin dilakukan:</div>
+            </div>
+        `;
+
+        if (uploadedItems.length > 0) {
+            const res = await Swal.fire({
+                title: 'Perhatian: Ada Berkas Belum Terunggah',
+                html: htmlPending,
+                icon: 'warning',
+                showDenyButton: true,
+                showCancelButton: true,
+                confirmButtonText: `<i class="fa-solid fa-trash-can me-1"></i> Hapus yang Sudah Sukses (${uploadedItems.length} berkas)`,
+                denyButtonText: '<i class="fa-solid fa-broom me-1"></i> Hanya Bersihkan Layar (Simpan Berkas)',
+                cancelButtonText: 'Batal',
+                confirmButtonColor: '#2563eb',
+                denyButtonColor: '#475569',
+                cancelButtonColor: '#94a3b8'
+            });
+
+            if (res.isConfirmed) {
+                await executeClearQueue("uploaded_only");
+            } else if (res.isDenied) {
+                await executeClearQueue("none");
+            }
+        } else {
+            // Semua berkas belum terunggah sama sekali!
+            const res = await Swal.fire({
+                title: 'Perhatian: Seluruh Berkas Belum Terunggah',
+                html: htmlPending,
+                icon: 'warning',
+                showDenyButton: true,
+                showCancelButton: true,
+                confirmButtonText: '<i class="fa-solid fa-broom me-1"></i> Hanya Kosongkan Layar (Berkas Fisik Aman)',
+                denyButtonText: '<i class="fa-solid fa-triangle-exclamation me-1"></i> Paksa Hapus Semua File di Inbox',
+                cancelButtonText: 'Batal',
+                confirmButtonColor: '#2563eb',
+                denyButtonColor: '#dc2626',
+                cancelButtonColor: '#94a3b8'
+            });
+
+            if (res.isConfirmed) {
+                await executeClearQueue("none");
+            } else if (res.isDenied) {
+                // Secondary confirmation for destructive deletion of un-uploaded files
+                const doubleCheck = await Swal.fire({
+                    title: 'Konfirmasi Penghapusan Total',
+                    text: 'Apakah Anda benar-benar yakin ingin MENGHAPUS SEMUA file fisik di folder inbox, termasuk berkas yang belum diunggah ke Portal TKA?',
+                    icon: 'error',
+                    showCancelButton: true,
+                    confirmButtonText: 'Ya, Hapus Semua Secara Permanen',
+                    cancelButtonText: 'Batal',
+                    confirmButtonColor: '#dc2626'
+                });
+                if (doubleCheck.isConfirmed) {
+                    await executeClearQueue("all");
+                }
+            }
+        }
+    }
+
+    async function executeClearQueue(deleteMode) {
+        Swal.fire({
+            title: 'Memproses...',
+            text: 'Membersihkan antrean & berkas...',
+            allowOutsideClick: false,
+            didOpen: () => Swal.showLoading()
         });
-        if (conf.isConfirmed) {
-            await fetch("/api/queue/clear", {method: "POST"});
+
+        try {
+            const res = await fetch("/api/queue/clear", {
+                method: "POST",
+                headers: {"Content-Type": "application/json"},
+                body: JSON.stringify({delete_files: deleteMode})
+            });
+            const data = await res.json();
+            if (data.success) {
+                Swal.fire({
+                    icon: 'success',
+                    title: 'Selesai',
+                    text: data.msg || 'Antrean berhasil diperbarui.',
+                    timer: 2200,
+                    showConfirmButton: false
+                });
+            } else {
+                Swal.fire('Gagal', data.msg || 'Terjadi kesalahan.', 'error');
+            }
             loadQueue();
             refreshStatus();
+        } catch (err) {
+            Swal.fire('Error', '' + err, 'error');
         }
     }
 

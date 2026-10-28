@@ -18,6 +18,14 @@ Format berkas ini mengacu pada [Keep a Changelog](https://keepachangelog.com/id/
   - Endpoint baru `/api/portal/captcha` dan `/api/portal/login` yang mendukung transmisi kode keamanan langsung dari UI.
 
 ### Ditambahkan (Added)
+- **Penghapusan Aman Berkas Scan Saat Kosongkan Antrean**:
+  - Dialog konfirmasi cerdas saat mengosongkan antrean: memeriksa status berkas dan membedakan antara berkas yang sudah terunggah (`UPLOADED`) vs berkas tertunda (`READY`, `FAILED`, `NEEDS_REVIEW`).
+  - Peringatan eksplisit risiko kehilangan berkas asli jika scanner menyimpan hasil pemindaian langsung ke direktori `inbox/`.
+  - Pilihan tindakan yang aman: opsi hapus berkas fisik yang sudah sukses saja, simpan berkas fisik (hanya bersihkan tampilan), atau hapus semua dengan konfirmasi ganda.
+  - Proteksi keamanan backend terhadap *path traversal* (`is_safe_inbox_file`) yang menjamin tidak ada berkas di luar `inbox/` yang dapat terhapus.
+- **Penyederhanaan Navigasi & Menu Pengaturan Terpadu**:
+  - Mengubah menu samping menjadi **"Pengaturan"** (`fa-gear`) yang mencakup semua kontrol scanner, portal, OCR, dan pembaruan.
+  - Menghapus tombol menu *"Panduan Setup Awal"* yang redundan dari sidebar; modal setup otomatis berjalan saat aplikasi pertama kali dijalankan (belum terkonfigurasi).
 - **Pemulihan Sesi Persisten (Zero-Friction Session Restore)**:
   - Menyimpan cookie sesi terautentikasi dan token CSRF secara lokal (`.tka_session.json`) dengan pengamanan `.gitignore`.
   - Aplikasi langsung mengenali sesi aktif saat dibuka kembali tanpa perlu login ulang atau memicu CAPTCHA berulang kali.

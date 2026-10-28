@@ -623,6 +623,14 @@ def api_import_folder():
 
     return jsonify({"success": True, "total_found": len(found_files), "imported": len(results)})
 
+def is_safe_inbox_file(file_path: str) -> bool:
+    """Security check: ensures path is strictly inside INBOX_DIR and is a regular file"""
+    try:
+        p = Path(file_path).resolve()
+        return p.is_relative_to(INBOX_DIR.resolve()) and p.is_file()
+    except Exception:
+        return False
+
 @app.route("/api/queue")
 def api_queue():
     return jsonify({"queue": queue})
@@ -630,8 +638,58 @@ def api_queue():
 @app.route("/api/queue/clear", methods=["POST"])
 def api_queue_clear():
     global queue
-    queue = []
-    return jsonify({"success": True})
+    data = request.get_json(silent=True) or {}
+    delete_mode = data.get("delete_files", "none") # "uploaded_only", "all", "none"
+    
+    deleted_count = 0
+    if delete_mode == "uploaded_only":
+        new_queue = []
+        for item in queue:
+            if item.get("status") == "UPLOADED":
+                fp = item.get("file_path")
+                if fp and is_safe_inbox_file(fp):
+                    try:
+                        Path(fp).unlink(missing_ok=True)
+                        deleted_count += 1
+                        logger.info("Physical scan file deleted (Uploaded): %s", Path(fp).name)
+                    except Exception as e:
+                        logger.error("Failed to delete %s: %s", fp, e)
+            else:
+                new_queue.append(item)
+        queue = new_queue
+        msg = f"Berhasil menghapus {deleted_count} berkas scan yang sudah terunggah dari folder inbox."
+    elif delete_mode == "all":
+        for item in queue:
+            fp = item.get("file_path")
+            if fp and is_safe_inbox_file(fp):
+                try:
+                    Path(fp).unlink(missing_ok=True)
+                    deleted_count += 1
+                    logger.info("Physical scan file deleted (All): %s", Path(fp).name)
+                except Exception as e:
+                    logger.error("Failed to delete %s: %s", fp, e)
+        # Also clean any loose scanned images directly in INBOX_DIR
+        for ext in ["*.jpg", "*.jpeg", "*.png"]:
+            for fp in INBOX_DIR.glob(ext):
+                if fp.is_file() and fp.name != ".gitkeep":
+                    try:
+                        fp.unlink(missing_ok=True)
+                        deleted_count += 1
+                    except Exception:
+                        pass
+        queue = []
+        msg = f"Seluruh berkas scan di folder inbox ({deleted_count} berkas) telah dihapus dan antrean dikosongkan."
+    else: # "none"
+        queue = []
+        msg = "Antrean di layar berhasil dikosongkan (berkas fisik scan tetap tersimpan di folder inbox)."
+
+    return jsonify({
+        "success": True,
+        "delete_mode": delete_mode,
+        "deleted_count": deleted_count,
+        "remaining_count": len(queue),
+        "msg": msg
+    })
 
 @app.route("/api/queue/reprocess_all", methods=["POST"])
 def api_queue_reprocess_all():
