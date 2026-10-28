@@ -6,6 +6,46 @@ Format berkas ini mengacu pada [Keep a Changelog](https://keepachangelog.com/id/
 
 ---
 
+## [1.0.2] - 2026-10-28
+
+### Diperbaiki (Fixed)
+- **Perbaikan Tuntas Unggah Berkas Portal TKA**:
+  - Mengembalikan nama field multipart file menjadi `absen1_file` (untuk Daftar Hadir) dan `gambar_file` (untuk Berita Acara Pelaksanaan/BAP) disertai parameter teks `absen1` dan `gambar` sesuai spesifikasi backend CodeIgniter portal TKA Kemendikdasmen.
+  - Mengatasi galat `"Upload Gagal !"` (100% berkas terunggah sukses dan terverifikasi di portal).
+- **Penanganan Verifikasi Keamanan Interaktif (CAPTCHA Challenge)**:
+  - Deteksi otomatis saat portal mengaktifkan verifikasi CAPTCHA (`showSecure: true` / `"Kode keamanan tidak sesuai"`).
+  - Penambahan form visual CAPTCHA di Pengaturan Portal dan Panduan Setup Awal lengkap dengan gambar kode dan tombol muat ulang (*Refresh*).
+  - Endpoint baru `/api/portal/captcha` dan `/api/portal/login` yang mendukung transmisi kode keamanan langsung dari UI.
+
+### Ditambahkan (Added)
+- **Pemulihan Sesi Persisten (Zero-Friction Session Restore)**:
+  - Menyimpan cookie sesi terautentikasi dan token CSRF secara lokal (`.tka_session.json`) dengan pengamanan `.gitignore`.
+  - Aplikasi langsung mengenali sesi aktif saat dibuka kembali tanpa perlu login ulang atau memicu CAPTCHA berulang kali.
+  - Verifikasi otomatis koneksi portal sebelum menjalankan antrean unggah batch.
+
+---
+
+## [1.0.1] - 2026-10-28
+
+### Diperbaiki (Fixed)
+- **Sinkronisasi Jadwal & Proteksi CSRF/Anti-Replay**:
+  - Penangkapan token CSRF aktif secara bersih dari navigasi browser `/user/home`.
+  - Injeksi dinamis header unik `X-REQUEST-ID` dan `X-CSRF-TOKEN` untuk mencegah penolakan server (HTTP 403).
+  - Penguraian otomatis kode sekolah (`kd_jenjang`, `kd_prop`, `kd_kota`, `kd_sek`) dari username proktor.
+- **Tampilan Ikon Aplikasi Windows (Taskbar & Start Menu)**:
+  - Pembuatan favicon dan ikon aplikasi multi-resolusi (16x16, 24x24, 32x32, 48x48, 64x64, 128x128, 256x256).
+  - Registrasi `SetCurrentProcessExplicitAppUserModelID` di `desktop_app.py` agar icon taskbar Windows tidak revert ke dokumen putih kosong.
+  - Perbaikan jalur shortcut installer Inno Setup ke `{app}\favicon.ico`.
+
+### Ditambahkan (Added)
+- **Pembaruan Otomatis In-App (Zero-Data-Loss In-App Auto-Updater)**:
+  - Mekanisme pembaruan aplikasi 1-klik di dalam antarmuka (seperti Antigravity / VS Code) tanpa perlu instalasi ulang manual.
+  - Perlindungan mutlak data pengguna: tidak pernah menimpa `settings.json`, `inbox/`, `processed/`, atau `logs/`.
+  - Fallback otomatis ke public web scraper saat GitHub unauthenticated API terkena rate limit (HTTP 403).
+  - Tombol *Cek Update* di navbar atas dan sidebar dengan indikator download progresif.
+
+---
+
 ## [1.0.0] - 2026-10-27
 
 ### Ditambahkan (Added)
