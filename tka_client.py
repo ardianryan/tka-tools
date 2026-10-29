@@ -104,14 +104,15 @@ class TKAClient:
         try:
             home_url = f"{self.base_url}/user/home"
             res = self.session.get(home_url, timeout=15)
-            if res.status_code == 200 and "/login" not in res.url:
+            # Must remain on /user/home and contain a valid csrfToken
+            if res.status_code == 200 and "/user/home" in res.url:
                 m = re.search(r'csrfToken\s*=\s*[\'"]([^\'"]+)[\'"]', res.text)
                 if m:
                     self.csrf_token = m.group(1)
-                self.is_authenticated = True
-                self.require_captcha = False
-                logger.info("Active TKA session verified and restored for %s (CSRF: %s...)", self.username, (self.csrf_token or "")[:10])
-                return True
+                    self.is_authenticated = True
+                    self.require_captcha = False
+                    logger.info("Active TKA session verified and restored for %s (CSRF: %s...)", self.username, (self.csrf_token or "")[:10])
+                    return True
         except Exception as e:
             logger.debug("Session verification failed: %s", e)
         self.is_authenticated = False
@@ -239,7 +240,7 @@ class TKAClient:
                 res = self.session.request(method, url, **kwargs)
                 
                 # Check if server redirected to login or returned CSRF/session error
-                if res.status_code in [401, 403] or "/login" in res.url:
+                if res.status_code in [401, 403] or "/login" in res.url or (res.status_code == 200 and "Anda tidak memiliki akses" in res.text):
                     last_error = f"HTTP {res.status_code}: {res.text[:200]}"
                     logger.warning("Session expired or unauthorized (%s), re-authenticating...", last_error)
                     self.is_authenticated = False

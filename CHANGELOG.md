@@ -6,6 +6,21 @@ Format berkas ini mengacu pada [Keep a Changelog](https://keepachangelog.com/id/
 
 ---
 
+## [1.0.3] - 2026-10-29
+
+### Diperbaiki (Fixed)
+- **Pembacaan Komprehensif Berita Acara Pelaksanaan (BAP)**:
+  - Mengatasi kesalahan inferensi Sesi pada jam pelaksanaan ujian: jam `11:10 sampai dengan 12:30` kini secara akurat dipetakan ke **Sesi 3** (sebelumnya salah terbaca sebagai Sesi 2 akibat pengelompokan jam `11:xx` ke sesi 2).
+  - Mengimplementasikan pemetaan waktu berbasis total menit presisi:
+    - Sesi 1: Mulai $\le$ 08:45 (misal 07:00, 07:30, 08:00)
+    - Sesi 2: Mulai 08:46 - 10:45 (misal 09:00, 09:05, 10:00, 10:30)
+    - Sesi 3: Mulai $\ge$ 10:46 (misal 11:00, 11:10, 12:30, 13:00)
+  - Ekstraksi langsung nilai Sesi dari tabel metadata dokumen BAP (termasuk artefak scan seperti `.3`, `: 3`, `- 3`, ` 3`).
+  - Menghilangkan *false positive duplicate* ("Rangkap 2 Terdeteksi") pada Berita Acara Sesi 3 yang sebelumnya salah diabaikan karena bentrok dengan berkas Sesi 2.
+  - Peningkatan ketahanan validasi sesi portal TKA: penanganan respons HTTP 200 dengan status *"Anda tidak memiliki akses"* dan auto re-authentication.
+
+---
+
 ## [1.0.2] - 2026-10-28
 
 ### Diperbaiki (Fixed)

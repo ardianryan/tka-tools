@@ -143,77 +143,143 @@ def parse_tka_document(ocr_lines: list, full_text: str, header_lines: list = Non
                 doc["tanggal"] = f"{tgl_k} (Terdeteksi)"
                 break
 
-    # 5. Jam / Sesi Detection
-    # A. Header table column pattern: 0005 followed by 1, 2, or 3
-    m_sesi_hdr = re.search(r'\b0005\s+([1-3])\b', combined_header or text)
-    if m_sesi_hdr:
-        doc["sesi"] = int(m_sesi_hdr.group(1))
+    # 5. Sesi & Jam Detection
+    # Extract Jam Pelaksanaan (pukul HH:MM)
+    m_jam = re.search(r'(?:pukul|jam)\s*(\d{1,2})[:.](\d{2})', text, re.I)
+    if not m_jam:
+        m_jam = re.search(r'(\d{1,2})[:.](\d{2})\s*(?:sampai|s\.d|sd|-)', text, re.I)
 
-    # B. Exam time pattern: 07:00 / 07.00 -> Sesi 1; 10:00 -> Sesi 2; 13:00 -> Sesi 3
-    if not doc["sesi"]:
-        m_jam = re.search(r'(\d{2}[:.]\d{2})\s*(?:sampai|s\.d|sd|-)', text, re.I)
-        if m_jam:
-            jam_str = m_jam.group(1).replace(".", ":")
-            doc["jam"] = jam_str
-            if jam_str.startswith("07") or jam_str.startswith("08"):
-                doc["sesi"] = 1
-            elif jam_str.startswith("09") or jam_str.startswith("10") or jam_str.startswith("11"):
-                doc["sesi"] = 2
-            elif jam_str.startswith("12") or jam_str.startswith("13") or jam_str.startswith("14"):
-                doc["sesi"] = 3
+    jam_str = None
+    sesi_from_jam = None
+    if m_jam:
+        h = int(m_jam.group(1))
+        m = int(m_jam.group(2))
+        mins = h * 60 + m
+        jam_str = f"{h:02d}:{m:02d}"
+        doc["jam"] = jam_str
+        # Precise session boundaries based on standard school exam schedules (TKA / ANBK):
+        # Sesi 1: 06:30 - 08:45 (390..525 mins, e.g. 07:00, 07:30, 08:00)
+        # Sesi 2: 08:46 - 10:45 (526..645 mins, e.g. 09:00, 09:05, 10:00, 10:30)
+        # Sesi 3: >= 10:46 (>= 646 mins, e.g. 11:00, 11:10, 12:30, 13:00, 13:30)
+        if mins <= 525:
+            sesi_from_jam = 1
+        elif mins <= 645:
+            sesi_from_jam = 2
+        else:
+            sesi_from_jam = 3
 
-    # C. Direct Sesi keyword search
-    if not doc["sesi"]:
-        m_sesi = re.search(r'\bSesi\s*[:\s]*([1-3])\b', text, re.I)
-        if m_sesi:
-            doc["sesi"] = int(m_sesi.group(1))
+    if doc["doc_type"] == "BAP":
+        # Comprehensive BAP Sesi Extraction:
+        sesi_table = None
 
-    # D. In BAP, table structure search:
-    if not doc["sesi"] and doc["doc_type"] == "BAP":
-        for i, line in enumerate(ocr_lines):
+        # 5.A Direct inline table row: "Sesi : 3" or "Sesi. 3" (exclude notes/catatan)
+        for line in ocr_lines:
             l_text = get_line_text(line)
-            if "Sesi" in l_text:
-                for next_l in ocr_lines[i+1:i+15]:
-                    nl_text = get_line_text(next_l).strip()
-                    if nl_text in ["1", "2", "3"]:
-                        doc["sesi"] = int(nl_text)
-                        break
-                if doc["sesi"]:
-                    break
+            if any(k in l_text.lower() for k in ["pelaksanaan", "catatan", "berjalan"]):
+                continue
+            m = re.search(r'\bSesi\s*[:.\s\-_·*]+\s*([1-3])\b', l_text, re.I)
+            if m:
+                sesi_table = int(m.group(1))
+                break
 
-    # E. In DH, header row search:
-    if not doc["sesi"] and doc["doc_type"] == "DH":
-        search_lines = (header_lines or []) + ocr_lines
-        for i, line in enumerate(search_lines):
+        # 5.B Two-column table alignment: value row after ID Server (e.g. U05120005-AZ5U)
+        if not sesi_table:
+            for i, line in enumerate(ocr_lines):
+                l_text = get_line_text(line)
+                if re.search(r'[A-Z0-9]{8,10}-[A-Z0-9]+', l_text):
+                    for next_l in ocr_lines[i+1:min(len(ocr_lines), i+7)]:
+                        nl_text = get_line_text(next_l).strip()
+                        if any(k in nl_text.lower() for k in ["pelaksanaan", "catatan", "berjalan"]):
+                            continue
+                        m_val = re.search(r'^[.:\s\-_·*]*([1-3])(?:\s+|$)', nl_text)
+                        if m_val:
+                            # Skip if it is participant count (e.g. 20, 25, 30)
+                            if re.match(r'^[.:\s]*[1-4][0-9]\b', nl_text):
+                                continue
+                            sesi_table = int(m_val.group(1))
+                            break
+                    if sesi_table:
+                        break
+
+        # 5.C Proctor Catatan fallback
+        sesi_catatan = None
+        for line in ocr_lines:
             l_text = get_line_text(line)
-            if "SESI" in l_text.upper():
-                nums = re.findall(r'\b([1-3])\b', l_text)
-                if nums:
-                    doc["sesi"] = int(nums[-1])
-                    break
-                for next_l in search_lines[i+1:i+6]:
-                    nl_text = get_line_text(next_l).strip()
-                    if nl_text in ["1", "2", "3"]:
-                        doc["sesi"] = int(nl_text)
+            m_cat = re.search(r'Pelaksanaan\s+TKA\s+Sesi\s*([1-3])', l_text, re.I)
+            if m_cat:
+                sesi_catatan = int(m_cat.group(1))
+                break
+
+        # Synthesis & Cross-Corroboration for BAP:
+        if sesi_table and sesi_from_jam:
+            if sesi_table == sesi_from_jam:
+                doc["sesi"] = sesi_table
+            else:
+                # If table and time conflict, exam start time (e.g. 11:10) is authoritative ground truth
+                doc["sesi"] = sesi_from_jam
+        elif sesi_from_jam:
+            doc["sesi"] = sesi_from_jam
+        elif sesi_table:
+            doc["sesi"] = sesi_table
+        elif sesi_catatan:
+            doc["sesi"] = sesi_catatan
+
+    elif doc["doc_type"] == "DH":
+        # Comprehensive DH Sesi Extraction:
+        # A. Header table column pattern: 0005 followed by 1, 2, or 3
+        m_sesi_hdr = re.search(r'\b0005\s+([1-3])\b', combined_header or text)
+        if m_sesi_hdr:
+            doc["sesi"] = int(m_sesi_hdr.group(1))
+
+        # B. Header row search for SESI
+        if not doc["sesi"]:
+            search_lines = (header_lines or []) + ocr_lines
+            for i, line in enumerate(search_lines):
+                l_text = get_line_text(line)
+                if "SESI" in l_text.upper():
+                    nums = re.findall(r'\b([1-3])\b', l_text)
+                    if nums:
+                        doc["sesi"] = int(nums[-1])
                         break
-                if doc["sesi"]:
-                    break
+                    for next_l in search_lines[i+1:i+6]:
+                        nl_text = get_line_text(next_l).strip()
+                        if nl_text in ["1", "2", "3"]:
+                            doc["sesi"] = int(nl_text)
+                            break
+                    if doc["sesi"]:
+                        break
 
-    # 6. Extract Student Participants Fingerprint & Sesi Range Verification
-    pats = sorted(list(set(re.findall(r'0005\d{4,5}', full_text))))
-    doc["participants"] = pats
+        # C. Direct Sesi keyword search
+        if not doc["sesi"]:
+            m_sesi = re.search(r'\bSesi\s*[:\s]*([1-3])\b', text, re.I)
+            if m_sesi:
+                doc["sesi"] = int(m_sesi.group(1))
 
-    # Verifikasi Sesi berdasarkan Rentang Nomor Urut Siswa (80 siswa per sesi, 4 lab @ 20 siswa)
-    if pats:
-        first_num = re.search(r'0005(\d{4})', pats[0])
-        if first_num:
-            idx = int(first_num.group(1))
-            if 1 <= idx <= 80:
-                doc["sesi"] = 1
-            elif 81 <= idx <= 160:
-                doc["sesi"] = 2
-            elif 161 <= idx <= 240:
-                doc["sesi"] = 3
+        # D. Jam fallback for DH if available
+        if not doc["sesi"] and sesi_from_jam:
+            doc["sesi"] = sesi_from_jam
+
+        # E. Extract Student Participants Fingerprint & Sesi Range Verification (DH only)
+        pats = sorted(list(set(re.findall(r'0005\d{4,5}', full_text))))
+        doc["participants"] = pats
+        if pats and not doc["sesi"]:
+            first_num = re.search(r'0005(\d{4})', pats[0])
+            if first_num:
+                idx = int(first_num.group(1))
+                if 1 <= idx <= 80:
+                    doc["sesi"] = 1
+                elif 81 <= idx <= 160:
+                    doc["sesi"] = 2
+                elif 161 <= idx <= 240:
+                    doc["sesi"] = 3
+    else:
+        # Unknown document type fallback
+        if sesi_from_jam:
+            doc["sesi"] = sesi_from_jam
+        else:
+            m_sesi = re.search(r'\bSesi\s*[:\s]*([1-3])\b', text, re.I)
+            if m_sesi:
+                doc["sesi"] = int(m_sesi.group(1))
 
     # 7. Mapel determination (from Hari or text)
     if "Bahasa Indonesia" in text:
