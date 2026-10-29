@@ -1869,6 +1869,19 @@
                 Swal.fire('Sinkronisasi Berhasil!', data.msg, 'success');
                 loadSlots();
                 refreshStatus();
+            } else if (data.require_captcha || data.msg.includes("CAPTCHA") || data.msg.includes("kedaluwarsa")) {
+                const ask = await Swal.fire({
+                    title: 'Sesi Portal Kedaluwarsa',
+                    text: 'Sesi login ke portal TKA telah berakhir dan server memerlukan verifikasi kode keamanan (CAPTCHA). Masukkan kode CAPTCHA sekarang?',
+                    icon: 'warning',
+                    showCancelButton: true,
+                    confirmButtonText: '<i class="fa-solid fa-right-to-bracket me-1"></i> Masukkan CAPTCHA',
+                    cancelButtonText: 'Tutup',
+                    confirmButtonColor: '#2563eb'
+                });
+                if (ask.isConfirmed) {
+                    openScannerSettings(2);
+                }
             } else {
                 Swal.fire('Gagal Sinkronisasi', data.msg || 'Tidak dapat terhubung.', 'error');
             }

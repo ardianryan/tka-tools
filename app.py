@@ -199,7 +199,11 @@ def sync_portal_slots():
             bap = tka_client.get_pelaksanaan_slots()
             dh = tka_client.get_absen_slots()
             if not bap and not dh:
-                raise Exception("Portal mengembalikan data kosong atau gagal dihubungi.")
+                if tka_client.require_captcha:
+                    raise Exception("Sesi portal kedaluwarsa dan memerlukan kode keamanan (CAPTCHA). Silakan klik [Masuk] di pojok kiri bawah.")
+                elif not tka_client.is_authenticated:
+                    raise Exception("Sesi portal terputus. Silakan login kembali melalui menu Pengaturan.")
+                raise Exception("Portal mengembalikan data kosong atau jadwal belum dibuat di web TKA.")
             cached_slots["bap"] = bap
             cached_slots["dh"] = dh
             cached_slots["last_sync"] = True
@@ -534,6 +538,8 @@ def api_sync():
     return jsonify({
         "success": success,
         "msg": msg,
+        "require_captcha": tka_client.require_captcha,
+        "portal_connected": tka_client.is_authenticated,
         "bap_count": len(cached_slots["bap"]),
         "dh_count": len(cached_slots["dh"])
     })

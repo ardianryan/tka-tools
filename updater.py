@@ -259,6 +259,27 @@ class UpdateChecker:
         thread = threading.Thread(target=_worker, name="BackgroundUpdateChecker", daemon=True)
         thread.start()
 
+def get_secure_update_dir() -> Path:
+    """Returns a safe, user-writable directory for downloading and staging update packages."""
+    local_app_data = os.getenv("LOCALAPPDATA")
+    if local_app_data:
+        p = Path(local_app_data) / "SmartTKAScanner" / "updates"
+    else:
+        import tempfile
+        p = Path(tempfile.gettempdir()) / "SmartTKAScanner_updates"
+    p.mkdir(parents=True, exist_ok=True)
+    return p
+
+def is_base_dir_writable() -> bool:
+    """Checks whether the application directory is writable by the current process without UAC elevation."""
+    try:
+        test_file = BASE_DIR / ".perm_check"
+        test_file.touch()
+        test_file.unlink()
+        return True
+    except Exception:
+        return False
+
 class InAppUpdateManager:
     """
     Manages in-place zero-data-loss application updates (similar to VS Code / Antigravity).
@@ -267,7 +288,7 @@ class InAppUpdateManager:
     """
     def __init__(self, checker: UpdateChecker):
         self.checker = checker
-        self.update_dir = BASE_DIR / "temp_update"
+        self.update_dir = get_secure_update_dir()
         self._lock = threading.Lock()
         self.state = {
             "is_downloading": False,
@@ -411,7 +432,8 @@ echo   Mohon tunggu beberapa detik, jangan tutup jendela ini.
 echo ========================================================
 echo.
 
-:: Tunggu 2 detik agar proses SmartTKAScanner.exe tertutup bersih
+:: Tutup proses SmartTKAScanner jika masih berjalan
+taskkill /f /im SmartTKAScanner.exe >nul 2>&1
 timeout /t 2 /nobreak >nul
 
 :: Salin binary dan aset aplikasi baru tanpa menimpa folder data pengguna
@@ -434,12 +456,21 @@ exit
                 self.state["status_text"] = "Pembaruan siap dipasang! Merestart aplikasi dalam 2 detik..."
 
             # 4. Spawn detached bootstrap updater runner
-            subprocess.Popen(
-                ["cmd.exe", "/c", str(cmd_script)],
-                cwd=str(BASE_DIR),
-                creationflags=0x08000000 | 0x00000008,  # CREATE_NO_WINDOW | DETACHED_PROCESS
-                close_fds=True
-            )
+            if not is_base_dir_writable():
+                logger.info("Application directory is protected (Program Files). Requesting UAC elevation for update...")
+                ps_script = f"Start-Process cmd.exe -ArgumentList '/c \"\"{cmd_script}\"\"' -Verb RunAs"
+                subprocess.Popen(
+                    ["powershell.exe", "-WindowStyle", "Hidden", "-Command", ps_script],
+                    creationflags=0x08000000 | 0x00000008,
+                    close_fds=True
+                )
+            else:
+                subprocess.Popen(
+                    ["cmd.exe", "/c", str(cmd_script)],
+                    cwd=str(BASE_DIR),
+                    creationflags=0x08000000 | 0x00000008,  # CREATE_NO_WINDOW | DETACHED_PROCESS
+                    close_fds=True
+                )
 
             # 5. Smoothly exit after 1.5 seconds
             def _delayed_exit():

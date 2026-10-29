@@ -18,6 +18,10 @@ Format berkas ini mengacu pada [Keep a Changelog](https://keepachangelog.com/id/
   - Ekstraksi langsung nilai Sesi dari tabel metadata dokumen BAP (termasuk artefak scan seperti `.3`, `: 3`, `- 3`, ` 3`).
   - Menghilangkan *false positive duplicate* ("Rangkap 2 Terdeteksi") pada Berita Acara Sesi 3 yang sebelumnya salah diabaikan karena bentrok dengan berkas Sesi 2.
   - Peningkatan ketahanan validasi sesi portal TKA: penanganan respons HTTP 200 dengan status *"Anda tidak memiliki akses"* dan auto re-authentication.
+- **Perbaikan Hak Akses Auto-Updater Windows (Mengatasi [WinError 5] Access is Denied)**:
+  - Mengalihkan direktori unduhan sementara (`temp_update`) dari folder instalasi terproteksi (`C:\Program Files (x86)\...`) ke direktori pengguna yang aman (`%LOCALAPPDATA%\SmartTKAScanner\updates`), sehingga proses unduh dan ekstraksi tidak pernah ditolak izinnya oleh Windows.
+  - Menambahkan dukungan eksekusi otomatis dengan eskalasi hak administrator (*UAC Elevation* via `-Verb RunAs`) khusus saat aplikasi terpasang di folder sistem `Program Files`.
+  - Menghentikan proses aplikasi lama secara tuntas (*clean shutdown*) sebelum menyalin berkas pembaruan untuk mencegah penguncian berkas (*file locked*).
 
 ---
 
