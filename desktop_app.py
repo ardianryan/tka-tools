@@ -13,6 +13,12 @@ try:
 except ImportError:
     pass
 
+# Ensure stdout/stderr are valid in Windows windowed (noconsole) mode
+if sys.stdout is None:
+    sys.stdout = open(os.devnull, "w")
+if sys.stderr is None:
+    sys.stderr = open(os.devnull, "w")
+
 from config import RESOURCE_DIR, SERVER_HOST, SERVER_PORT
 from app import app
 
