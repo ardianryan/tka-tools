@@ -15,6 +15,7 @@ from werkzeug.utils import secure_filename
 from config import (
     RESOURCE_DIR,
     BASE_DIR,
+    USER_DATA_DIR,
     INBOX_DIR,
     PROCESSED_DIR,
     DUPLICATES_DIR,
@@ -196,6 +197,14 @@ sync_lock = threading.Lock()
 def sync_portal_slots():
     with sync_lock:
         try:
+            # Auto-authenticate if credentials exist but session expired or not authenticated
+            if not tka_client.is_authenticated and tka_client.username and tka_client.password:
+                logger.info("Portal session not authenticated. Attempting auto-login for %s...", tka_client.username)
+                try:
+                    tka_client.login()
+                except Exception as auth_err:
+                    logger.debug("Auto-login attempt failed: %s", auth_err)
+
             bap = tka_client.get_pelaksanaan_slots()
             dh = tka_client.get_absen_slots()
             if not bap and not dh:
@@ -373,12 +382,16 @@ def process_batch_files(file_paths: list) -> list:
 watcher = FolderWatcher(watch_dir=INBOX_DIR, batch_callback=process_batch_files, settle_delay=5.0)
 watcher.start()
 
-# Sync slots on startup if credentials are configured
-if tka_client.username and tka_client.password:
-    try:
-        sync_portal_slots()
-    except Exception as e:
-        logger.debug("Initial portal sync skipped or failed: %s", e)
+# Sync slots on startup if credentials are configured (in background thread so UI starts immediately)
+def _startup_background_sync():
+    time.sleep(0.8)
+    if tka_client.username and tka_client.password:
+        try:
+            sync_portal_slots()
+        except Exception as e:
+            logger.debug("Initial portal sync skipped or failed: %s", e)
+
+threading.Thread(target=_startup_background_sync, daemon=True).start()
 
 # Check for application updates in background on startup
 try:
@@ -870,7 +883,7 @@ def download_riwayat_csv():
 def serve_image(filepath):
     try:
         p = Path(filepath).resolve()
-        if not p.is_relative_to(BASE_DIR):
+        if not (p.is_relative_to(BASE_DIR) or p.is_relative_to(USER_DATA_DIR)):
             return "Akses ditolak: di luar direktori kerja.", 403
         if p.suffix.lower() not in ALLOWED_EXTENSIONS:
             return "Format berkas tidak diizinkan.", 400

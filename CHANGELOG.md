@@ -6,6 +6,18 @@ Format berkas ini mengacu pada [Keep a Changelog](https://keepachangelog.com/id/
 
 ---
 
+## [1.0.5] - 2026-10-29
+
+### Diperbaiki (Fixed)
+- **Persistensi Konfigurasi & Smart Detection Akun Proktor (Zero Re-Login Guarantee)**:
+  - Mengatasi masalah popup modal *"Panduan Setup Awal Proktor"* yang terus muncul setiap kali aplikasi ditutup-buka atau diperbarui/ditimpa dengan instalasi baru.
+  - Memindahkan penyimpanan permanen berkas konfigurasi (`settings.json`) dan sesi login aktif (`.tka_session.json`) ke direktori profil pengguna standar Windows (`%APPDATA%\SmartTKAScanner`), bebas dari proteksi izin sistem `C:\Program Files (x86)`.
+  - Mengimplementasikan *Smart Migration*: secara otomatis mendeteksi dan memigrasikan akun proktor serta pengaturan yang sudah ada sebelumnya dari direktori lama tanpa perlu mengetik ulang username atau password.
+  - Penambahan *Auto-Login & Auto-Sync* di latar belakang saat aplikasi dibuka, menjaga sesi portal tetap aktif dan terverifikasi secara mulus (*seamless*).
+  - Memberikan hak izin penuh pengguna (`Permissions: users-full`) pada seluruh folder instalasi aplikasi di *Inno Setup* untuk mencegah kendala hak akses Windows (*Access is Denied*).
+
+---
+
 ## [1.0.4] - 2026-10-29
 
 ### Diperbaiki (Fixed)

@@ -2,6 +2,7 @@ import json
 import logging
 import random
 import re
+import shutil
 import socket
 import string
 import time
@@ -10,7 +11,7 @@ import requests
 from requests.adapters import HTTPAdapter
 from urllib3.util import Retry
 
-from config import BASE_DIR, TKA_BASE_URL, TKA_USERNAME, TKA_PASSWORD, TKA_KD_UJIAN
+from config import BASE_DIR, USER_DATA_DIR, TKA_BASE_URL, TKA_USERNAME, TKA_PASSWORD, TKA_KD_UJIAN
 
 # Force IPv4 on Windows to prevent IPv6 NAT64 connection resets
 _orig_getaddrinfo = socket.getaddrinfo
@@ -21,7 +22,9 @@ def _ipv4_getaddrinfo(host, port, family=0, type=0, proto=0, flags=0):
 socket.getaddrinfo = _ipv4_getaddrinfo
 
 logger = logging.getLogger("TKAClient")
-SESSION_FILE = BASE_DIR / ".tka_session.json"
+PRIMARY_SESSION_FILE = USER_DATA_DIR / ".tka_session.json"
+BASE_SESSION_FILE = BASE_DIR / ".tka_session.json"
+SESSION_FILE = PRIMARY_SESSION_FILE
 
 class TKAClient:
     def __init__(self, username=TKA_USERNAME, password=TKA_PASSWORD, base_url=TKA_BASE_URL):
@@ -75,18 +78,48 @@ class TKAClient:
                 "csrf_token": self.csrf_token,
                 "saved_at": time.time()
             }
-            with open(SESSION_FILE, "w", encoding="utf-8") as f:
+            USER_DATA_DIR.mkdir(parents=True, exist_ok=True)
+            with open(PRIMARY_SESSION_FILE, "w", encoding="utf-8") as f:
                 json.dump(data, f)
-            logger.info("TKA session cookies saved to disk (%s)", SESSION_FILE.name)
+            logger.info("TKA session cookies saved to primary storage (%s)", PRIMARY_SESSION_FILE)
+            
+            # Mirror to BASE_DIR if writable and distinct
+            try:
+                if BASE_SESSION_FILE.resolve() != PRIMARY_SESSION_FILE.resolve():
+                    with open(BASE_SESSION_FILE, "w", encoding="utf-8") as f:
+                        json.dump(data, f)
+            except Exception:
+                pass
         except Exception as e:
             logger.debug("Failed saving TKA session: %s", e)
 
     def load_session(self) -> bool:
-        """Loads and verifies existing persistent session from disk"""
+        """Loads and verifies existing persistent session from disk (with auto-migration)"""
         try:
-            if not SESSION_FILE.exists():
+            target_file = None
+            if PRIMARY_SESSION_FILE.exists():
+                target_file = PRIMARY_SESSION_FILE
+            else:
+                fallbacks = [
+                    BASE_SESSION_FILE,
+                    Path.home() / "Documents" / "tkascanner" / ".tka_session.json"
+                ]
+                for fb in fallbacks:
+                    try:
+                        if fb.resolve() != PRIMARY_SESSION_FILE.resolve() and fb.exists():
+                            target_file = fb
+                            # Copy to primary
+                            USER_DATA_DIR.mkdir(parents=True, exist_ok=True)
+                            shutil.copy2(fb, PRIMARY_SESSION_FILE)
+                            target_file = PRIMARY_SESSION_FILE
+                            break
+                    except Exception:
+                        continue
+
+            if not target_file or not target_file.exists():
                 return False
-            with open(SESSION_FILE, "r", encoding="utf-8") as f:
+
+            with open(target_file, "r", encoding="utf-8") as f:
                 data = json.load(f)
             if data.get("username") and self.username and data.get("username") != self.username:
                 return False

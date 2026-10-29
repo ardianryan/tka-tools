@@ -6,14 +6,25 @@ from pathlib import Path
 if getattr(sys, 'frozen', False):
     # PyInstaller extracts bundled files (templates, static) to sys._MEIPASS
     RESOURCE_DIR = Path(getattr(sys, '_MEIPASS', Path(sys.executable).parent))
-    # User-writable data directory is located next to the executable
+    # Executable base directory
     BASE_DIR = Path(sys.executable).resolve().parent
 else:
     RESOURCE_DIR = Path(__file__).resolve().parent
     BASE_DIR = Path(__file__).resolve().parent
 
+# Persistent User Configuration Directory (Safe from updates, re-installs, and UAC restrictions)
+if sys.platform == "win32":
+    appdata_base = os.getenv("APPDATA") or os.getenv("LOCALAPPDATA") or str(Path.home() / "AppData" / "Roaming")
+    USER_DATA_DIR = Path(appdata_base) / "SmartTKAScanner"
+else:
+    USER_DATA_DIR = Path.home() / ".config" / "smart-tka-scanner"
+
+USER_DATA_DIR.mkdir(parents=True, exist_ok=True)
+
 # Read .env if present
 env_file = BASE_DIR / ".env"
+if not env_file.exists():
+    env_file = USER_DATA_DIR / ".env"
 if env_file.exists():
     with open(env_file, "r", encoding="utf-8") as f:
         for line in f:
@@ -23,7 +34,7 @@ if env_file.exists():
                 os.environ.setdefault(k.strip(), v.strip())
 
 # Application Metadata & GitHub Repository for Updates
-APP_VERSION = os.getenv("APP_VERSION", "v1.0.4")
+APP_VERSION = os.getenv("APP_VERSION", "v1.0.5")
 GITHUB_REPO = os.getenv("GITHUB_REPO", "ardianryan/tka-tools")
 
 # TKA Portal Credentials (Default kosong untuk keamanan open-source, atur via settings.json atau Dashboard)
