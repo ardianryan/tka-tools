@@ -459,8 +459,10 @@ exit
             if not is_base_dir_writable():
                 logger.info("Application directory is protected (Program Files). Requesting UAC elevation for update...")
                 ps_script = f"Start-Process cmd.exe -ArgumentList '/c \"\"{cmd_script}\"\"' -Verb RunAs"
+                ps_exe = get_secure_update_dir() # fallback
+                from scanner_wia import get_powershell_exe
                 subprocess.Popen(
-                    ["powershell.exe", "-WindowStyle", "Hidden", "-Command", ps_script],
+                    [get_powershell_exe(), "-WindowStyle", "Hidden", "-Command", ps_script],
                     creationflags=0x08000000 | 0x00000008,
                     close_fds=True
                 )

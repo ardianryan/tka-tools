@@ -6,6 +6,22 @@ Format berkas ini mengacu pada [Keep a Changelog](https://keepachangelog.com/id/
 
 ---
 
+## [1.0.4] - 2026-10-29
+
+### Diperbaiki (Fixed)
+- **Perbaikan Komprehensif Scanner WIA (Mengatasi [WinError 2] The system cannot find the file specified)**:
+  - Menyelesaikan kegagalan pemanggilan PowerShell akibat variabel `PATH` sistem pengguna yang tidak menyertakan direktori `C:\Windows\System32\WindowsPowerShell\v1.0`.
+  - Implementasi resolver mutlak cerdas `get_powershell_exe()` yang melacak jalur resmi Windows PowerShell, SysWOW64, dan PowerShell 7 (pwsh).
+  - Scanner terhubung (seperti EPSON L5290 Series) kini langsung terdeteksi **Online: True** tanpa gagal eksekusi.
+  - Skrip pemindaian `wia_scan.ps1` dilacak secara dinamis di seluruh kemungkinan direktori bundel aplikasi.
+
+### Ditambahkan (Added)
+- **Bundling Penuh Visual C++ Runtime (Zero-Dependency Guarantee)**:
+  - Menyertakan seluruh pustaka biner Visual C++ 2015-2022 Redistributable (`msvcp140.dll`, `msvcp140_1.dll`, `msvcp140_2.dll`, `msvcp140_atomic_wait.dll`, `msvcp140_codecvt_ids.dll`, `vcruntime140.dll`, `vcruntime140_1.dll`) langsung di dalam folder aplikasi (`_internal`).
+  - Menghilangkan kebutuhan instalasi terpisah bagi komputer proktor/sekolah; aplikasi siap jalan langsung di Windows bersih tanpa perlu mengunduh komponen VC++.
+
+---
+
 ## [1.0.3] - 2026-10-29
 
 ### Diperbaiki (Fixed)

@@ -1,12 +1,42 @@
 import sys
+import os
 import subprocess
 import json
 import logging
+import shutil
 from pathlib import Path
-from config import INBOX_DIR, RESOURCE_DIR
+from config import INBOX_DIR, RESOURCE_DIR, BASE_DIR
 from settings_manager import load_settings
 
 logger = logging.getLogger("ScannerWIA")
+
+def get_powershell_exe() -> str:
+    """
+    Finds powershell.exe with multiple fallback strategies:
+    1. SystemRoot\\System32\\WindowsPowerShell\\v1.0\\powershell.exe (standard Windows location)
+    2. SystemRoot\\SysWOW64\\WindowsPowerShell\\v1.0\\powershell.exe (32-bit on 64-bit Windows)
+    3. pwsh (PowerShell Core / 7+)
+    4. shutil.which("powershell.exe") / shutil.which("powershell")
+    5. Fallback to "powershell.exe"
+    """
+    if sys.platform != "win32":
+        return shutil.which("pwsh") or shutil.which("powershell") or "powershell"
+
+    system_root = os.environ.get("SystemRoot", r"C:\Windows")
+    std_ps = Path(system_root) / "System32" / "WindowsPowerShell" / "v1.0" / "powershell.exe"
+    if std_ps.is_file():
+        return str(std_ps)
+
+    wow_ps = Path(system_root) / "SysWOW64" / "WindowsPowerShell" / "v1.0" / "powershell.exe"
+    if wow_ps.is_file():
+        return str(wow_ps)
+
+    for candidate in ["pwsh.exe", "pwsh", "powershell.exe", "powershell"]:
+        found = shutil.which(candidate)
+        if found and os.path.isfile(found):
+            return found
+
+    return "powershell.exe"
 
 def _get_subprocess_flags() -> dict:
     """Returns Windows flags to completely prevent console/cmd windows from popping up."""
@@ -27,20 +57,37 @@ foreach ($info in $wia.DeviceInfos) {
     $id = $info.DeviceID
     $found += @{ name = $name; id = $id }
 }
-$found | ConvertTo-Json -Compress
+if ($found.Count -eq 0) {
+    Write-Output "[]"
+} else {
+    $found | ConvertTo-Json -Compress
+}
 """
 
 class ScannerWIA:
     def __init__(self, output_dir=INBOX_DIR):
         self.output_dir = Path(output_dir)
         self.output_dir.mkdir(parents=True, exist_ok=True)
-        self.script_path = RESOURCE_DIR / "wia_scan.ps1"
+        self.powershell_exe = get_powershell_exe()
+
+        # Locate wia_scan.ps1 script path robustly
+        candidates = [
+            RESOURCE_DIR / "wia_scan.ps1",
+            BASE_DIR / "wia_scan.ps1",
+            BASE_DIR / "_internal" / "wia_scan.ps1",
+            Path(__file__).resolve().parent / "wia_scan.ps1"
+        ]
+        self.script_path = candidates[0]
+        for c in candidates:
+            if c.is_file():
+                self.script_path = c
+                break
 
     def list_devices(self) -> list:
         if sys.platform != "win32":
             return []
         try:
-            cmd = ["powershell", "-NoProfile", "-WindowStyle", "Hidden", "-ExecutionPolicy", "Bypass", "-Command", PS_CHECK_SCANNER]
+            cmd = [self.powershell_exe, "-NoProfile", "-WindowStyle", "Hidden", "-ExecutionPolicy", "Bypass", "-Command", PS_CHECK_SCANNER]
             res = subprocess.run(
                 cmd,
                 capture_output=True,
@@ -56,7 +103,7 @@ class ScannerWIA:
                 return data
             return []
         except Exception as e:
-            logger.error("Error listing WIA devices: %s", str(e))
+            logger.error("Error listing WIA devices using %s: %s", self.powershell_exe, str(e))
             return []
 
     def get_scanner_status(self, device_id: str = None, device_name: str = None) -> dict:
@@ -108,7 +155,7 @@ class ScannerWIA:
 
         try:
             cmd = [
-                "powershell",
+                self.powershell_exe,
                 "-NoProfile",
                 "-WindowStyle", "Hidden",
                 "-ExecutionPolicy", "Bypass",
