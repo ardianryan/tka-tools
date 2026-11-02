@@ -10,7 +10,7 @@ import threading
 import re
 from datetime import datetime
 from pathlib import Path
-from flask import Flask, render_template, request, jsonify, send_from_directory
+from flask import Flask, render_template, request, jsonify, send_from_directory, send_file
 from flask_cors import CORS
 from werkzeug.utils import secure_filename
 
@@ -992,36 +992,30 @@ def document_print_view(doc_type, gelombang, hari, sesi, lab_num):
     
     try:
         if doc_type == "BAP":
-            img, file_path = stamp_engine.stamp_bap(slot_match, ass)
+            return stamp_engine.render_bap_html(slot_match, ass, for_print=True, autoprint=True)
         else:
-            img, file_path = stamp_engine.stamp_dh(slot_match, ass)
-            
-        fn = Path(file_path).name
-        img_url = f"/preview/DokumenTKA/generated/{fn}"
-        return f"""<!DOCTYPE html>
-<html>
-<head>
-    <meta charset="utf-8">
-    <title>Cetak {doc_type} - Hari {hari} Sesi {sesi} Lab {lab_num}</title>
-    <style>
-        @page {{ size: A4 portrait; margin: 0; }}
-        html, body {{ margin: 0; padding: 0; width: 100%; height: 100%; background: #fff; }}
-        .print-container {{ width: 100%; display: flex; justify-content: center; }}
-        img {{ width: 100%; max-width: 210mm; height: auto; display: block; }}
-        @media print {{
-            body {{ -webkit-print-color-adjust: exact; print-color-adjust: exact; }}
-            img {{ width: 100%; max-width: 100%; height: auto; page-break-inside: avoid; }}
-        }}
-    </style>
-</head>
-<body onload="setTimeout(function(){{ window.print(); }}, 400);">
-    <div class="print-container">
-        <img src="{img_url}" alt="Dokumen {doc_type}">
-    </div>
-</body>
-</html>"""
+            return stamp_engine.render_dh_html(slot_match, ass, for_print=True, autoprint=True)
     except Exception as e:
+        logger.error("Failed preparing print view: %s", e)
         return f"<h3>Gagal menyiapkan cetak: {str(e)}</h3>", 500
+
+@app.route("/document/pdf/<doc_type>/<int:gelombang>/<int:hari>/<int:sesi>/<int:lab_num>")
+def document_pdf_view(doc_type, gelombang, hari, sesi, lab_num):
+    doc_type = doc_type.upper()
+    ass = signature_manager.get_assignment(gelombang, hari, sesi, lab_num) or {
+        "gelombang": gelombang, "hari": hari, "sesi": sesi, "lab_num": lab_num
+    }
+    slots = cached_slots["bap"] if doc_type == "BAP" else cached_slots["dh"]
+    slot_match = next((s for s in slots if str(s.get("hari")) == str(hari) and str(s.get("sesi")) == str(sesi)), {})
+
+    try:
+        pdf_path = stamp_engine.render_pdf(doc_type, slot_match, ass)
+        if pdf_path and pdf_path.exists():
+            return send_file(pdf_path, as_attachment=False, mimetype="application/pdf")
+        return "<h3>PDF tidak dapat dihasilkan</h3>", 500
+    except Exception as e:
+        logger.error("Failed generating PDF: %s", e)
+        return f"<h3>Gagal membuat PDF: {str(e)}</h3>", 500
 
 @app.route("/api/scan", methods=["POST"])
 def api_scan():

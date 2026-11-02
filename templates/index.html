@@ -3434,13 +3434,19 @@
                             <button class="btn btn-outline-secondary" onclick="openEditAssignment('${a.gelombang}', '${a.hari}', '${a.sesi}', '${a.lab_num}')" title="Edit Tanggal & Petugas">
                                 <i class="fa-solid fa-pen"></i>
                             </button>
-                            <button class="btn btn-outline-primary" onclick="generateAndPrintDocument('BAP', ${a.gelombang}, ${a.hari}, ${a.sesi}, ${a.lab_num})" title="Cetak BAP Lengkap">
+                            <button class="btn btn-outline-primary" onclick="generateAndPrintDocument('BAP', ${a.gelombang}, ${a.hari}, ${a.sesi}, ${a.lab_num})" title="Cetak BAP Langsung">
                                 <i class="fa-solid fa-print me-1"></i>BAP
                             </button>
-                            <button class="btn btn-outline-secondary" onclick="generateAndPrintDocument('DH', ${a.gelombang}, ${a.hari}, ${a.sesi}, ${a.lab_num})" title="Cetak Daftar Hadir">
+                            <button class="btn btn-outline-danger" onclick="downloadOfficialPdf('BAP', ${a.gelombang}, ${a.hari}, ${a.sesi}, ${a.lab_num})" title="Unduh Format Asli PDF BAP">
+                                <i class="fa-solid fa-file-pdf"></i>
+                            </button>
+                            <button class="btn btn-outline-secondary" onclick="generateAndPrintDocument('DH', ${a.gelombang}, ${a.hari}, ${a.sesi}, ${a.lab_num})" title="Cetak Daftar Hadir Langsung">
                                 <i class="fa-solid fa-print me-1"></i>DH
                             </button>
-                            <button class="btn btn-success" onclick="generateAndUploadDocument('BAP', ${a.gelombang}, ${a.hari}, ${a.sesi}, ${a.lab_num})" title="Generate JPG & Upload">
+                            <button class="btn btn-outline-danger" onclick="downloadOfficialPdf('DH', ${a.gelombang}, ${a.hari}, ${a.sesi}, ${a.lab_num})" title="Unduh Format Asli PDF DH">
+                                <i class="fa-solid fa-file-pdf"></i>
+                            </button>
+                            <button class="btn btn-success" onclick="generateAndUploadDocument('BAP', ${a.gelombang}, ${a.hari}, ${a.sesi}, ${a.lab_num})" title="Generate Citra Asli & Langsung Unggah">
                                 <i class="fa-solid fa-cloud-arrow-up"></i>
                             </button>
                         </div>
@@ -3581,7 +3587,12 @@
 
     function generateAndPrintDocument(docType, gel, hari, sesi, lab) {
         const url = `/document/print/${docType}/${gel}/${hari}/${sesi}/${lab}`;
-        window.open(url, "_blank", "width=850,height=1100");
+        window.open(url, "_blank", "width=920,height=1150");
+    }
+
+    function downloadOfficialPdf(docType, gel, hari, sesi, lab) {
+        const url = `/document/pdf/${docType}/${gel}/${hari}/${sesi}/${lab}`;
+        window.open(url, "_blank");
     }
 
     async function generateAndUploadDocument(docType, gel, hari, sesi, lab) {

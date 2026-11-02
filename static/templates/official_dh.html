@@ -1,0 +1,139 @@
+<!doctype html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <title>Daftar Hadir Peserta - Tes Kemampuan Akademik</title>
+    <link rel="stylesheet" href="{{ css_url }}">
+    <style>
+        @media screen {
+            body { background: #f1f5f9; padding: 25px 0; display: flex; justify-content: center; }
+            .page { box-shadow: 0 4px 20px rgba(0,0,0,0.15); border-radius: 4px; }
+        }
+        @media print {
+            @page { size: A4; margin: 0; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+            body { background: #fff !important; margin: 0 !important; }
+            .page { margin: 0 !important; box-shadow: none !important; width: 100% !important; padding: 1.2cm !important; }
+        }
+        .dh-sig-box {
+            position: relative;
+            height: 55px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        .sig-img {
+            max-height: 48px;
+            max-width: 140px;
+            object-fit: contain;
+            mix-blend-mode: multiply;
+        }
+        .stamp-img {
+            position: absolute;
+            left: -20px;
+            top: -15px;
+            width: 110px;
+            height: 110px;
+            pointer-events: none;
+            z-index: 10;
+            mix-blend-mode: multiply;
+        }
+    </style>
+</head>
+<body>
+    <div class="page">
+        <table width="100%">
+            <tr>
+                <td width="100"><img src="{{ tutwuri_url }}" height="75" alt="Tut Wuri"></td>
+                <td>
+                    <CENTER>
+                        <strong class="f12">
+                            DAFTAR HADIR PESERTA<BR>
+                            &nbsp;TES KEMAMPUAN AKADEMIK &nbsp;SMA/MA<BR>
+                            TAHUN &nbsp;2026
+                        </strong>
+                    </CENTER></td>
+                <td width="100"></td>
+            </tr>
+        </table>
+        <table class="detail">
+            <tr>
+                <td>KOTA/KABUPATEN</td><td>:</td><td><span style="width:300px;">{{ nama_kota }}</span></td>
+                <td>KODE</td><td>:</td><td><span style="width:100px;">{{ kd_kota }}</span></td>
+            </tr>
+            <tr>
+                <td>SEKOLAH/MADRASAH</td><td>:</td><td><span style="width:300px;">{{ nama_sekolah }}</span></td>
+                <td>KODE</td><td>:</td><td><span style="width:100px;">{{ kd_sek }}</span></td>
+            </tr>
+            <tr>
+                <td>ID SERVER / RUANG</td><td>:</td><td><span style="width:300px;">{{ kd_server }} / {{ nm_ruang }}</span></td>
+                <td>SESI</td><td>:</td><td><span style="width:50px;">{{ sesi }}</span></td>
+            </tr>
+            <tr>
+                <td>HARI</td><td>:</td>
+                <td><span style="width:80px;">{{ nama_hari }}</span>TANGGAL : <span style="width:150px;">{{ tanggal_pelaksanaan }}</span></td>
+                <td>PUKUL</td><td>:</td><td><span style="width:100px;">{{ jam }}</span></td>
+            </tr>
+        </table>
+        
+        {{ participants_table }}
+
+        <table width="100%" style="margin-top: 15px;">
+            <tr>
+                <td width="40%">
+                    <table style="border:1px solid black; font-size: 11px;">
+                    <tr>
+                        <td>Jumlah Peserta yang Seharusnya Hadir</td>
+                        <td>:</td>
+                        <td>{{ jm_seharusnya }} peserta</td>
+                    </tr>
+                    <tr>
+                        <td>Jumlah Peserta yang Tidak Hadir</td>
+                        <td>:</td>
+                        <td>{{ jm_tidak_hadir }} peserta</td>
+                    </tr>
+                    <tr style="border-top:1px solid black">
+                        <td>Jumlah Peserta Hadir</td>
+                        <td>:</td>
+                        <td>{{ jm_hadir }} peserta</td>
+                    </tr>
+                    </table>
+                </td>
+                <td align="center" width="200" style="position: relative;">
+                    Proktor<BR>
+                    <div class="dh-sig-box">
+                        {{ proktor_sig_tag }}
+                        {{ stamp_sig_tag }}
+                    </div>
+                    ( {{ proktor_nama }} )<BR>
+                    &nbsp;&nbsp;&nbsp;&nbsp;NIP. {{ proktor_nip }}
+                </td>
+                <td align="center" width="175" style="position: relative;">
+                    Pengawas<BR>
+                    <div class="dh-sig-box">
+                        {{ pengawas_sig_tag }}
+                    </div>
+                    ( {{ pengawas_nama }} )<BR>
+                    &nbsp;&nbsp;&nbsp;&nbsp;NIP. {{ pengawas_nip }}
+                </td>
+            </tr>
+        </table>
+        <BR><BR>
+        <div class="footer">
+            <table width="100%" height="30">
+            <tr>
+                <td width="25px" style="border:1px solid black"></td>
+                <td width="5px">&nbsp;</td>
+                <td style="border:1px solid black;font-weight:bold;font-size:14px;text-align:center;">KEMENTERIAN PENDIDIKAN DASAR DAN MENENGAH</td>
+                <td width="5px">&nbsp;</td>
+                <td width="25px" style="border:1px solid black"></td>
+            </tr>
+            </table>
+        </div>
+    </div>
+    <script>
+        if (window.location.search.includes("autoprint=1")) {
+            window.addEventListener("load", () => { setTimeout(() => window.print(), 300); });
+        }
+    </script>
+</body>
+</html>

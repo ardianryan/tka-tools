@@ -9,7 +9,10 @@ Format berkas ini mengacu pada [Keep a Changelog](https://keepachangelog.com/id/
 ## [1.1.0] - 2026-11-02
 
 ### Ditambahkan (Added)
-- **Mesin Penempelan Tanda Tangan & Stempel Resmi Otomatis (*Digital Signature & School Stamp Overlay Engine*)**:
+- **Mesin Penempelan Tanda Tangan & Stempel Resmi Otomatis (*Authentic Document & Digital Stamp Engine*)**:
+  - **Format Resmi Vektor & Cetak Asli dari Portal TKA**: Menghilangkan metode overlay gambar lama (tanpa kotak putih / teks timpaan buatan). Sistem kini mengadopsi 100% tata letak dan stylesheet resmi portal TKA (`cetak.min.css`), menyematkan tanda tangan dan cap basah secara alami dengan teknik perpaduan tinta (*multiply blending*).
+  - **Ekspor Dokumen Vektor PDF & Cetak Langsung**: Mendukung pembuatan berkas PDF resmi berkualitas tinggi (*vector PDF*) dan cetak langsung ke printer fisik (*direct print*) untuk Berita Acara (BAP) dan Daftar Hadir (DH).
+  - **Sinkronisasi Otomatis Petugas Nyata dari Portal**: Sistem secara dinamis menarik nama dan NIP Kepala Sekolah (`p1_nama`), Proktor (`p2_nama`), serta Pengawas Ruang (`p3_nama`) yang telah terdaftar resmi di portal TKA tanpa perlu entri manual.
   - **Master TTD Petugas dengan Smart Deduplication**: Cukup unggah berkas tanda tangan sekali per nama/NIP. Jika ada kesamaan nama atau NIP, sistem secara otomatis melewati (*skip*) dan langsung mengaitkan tanda tangan yang sudah tersimpan tanpa perlu mengunggah ulang.
   - **Stempel Cap Basah Sekolah**: Mendukung unggah stempel sekolah (PNG transparan) dengan kontrol ukuran (*scale*), kepekatan tinta (*opacity*), dan sudut rotasi alami ($-2^\circ$ s/d $-5^\circ$) yang otomatis ditempelkan tumpang tindih (*overlap*) di atas tanda tangan Kepala Sekolah / Penanggung Jawab.
   - **Pencetakan Langsung ke Printer (*Direct Print Ready*)**: Dokumen Berita Acara Pelaksanaan (BAP) dan Daftar Hadir (DH) langsung keluar dari printer fisik lengkap dengan tanda tangan proktor, pengawas sesi bersangkutan, kepala sekolah, dan cap stempel sekolah.

@@ -365,18 +365,24 @@ class SignatureManager:
                 k = self.get_assignment_key(gel, hari, sesi, lab_num)
                 existing = self.data.setdefault("assignments", {}).get(k, {})
 
-                # 1. Pull dynamic date from portal or fallback
+                # 1. Pull dynamic date and time from portal or fallback
+                jam_range = ""
+                if s.get("jam_mulai") and s.get("jam_selesai"):
+                    jam_range = f"{s['jam_mulai']} - {s['jam_selesai']}"
+
                 tgl = s.get("tgl_pelaksanaan") or s.get("tanggal") or existing.get("tanggal") or default_dates.get(hari, "26 Oktober 2026")
-                jam = s.get("jam") or existing.get("jam") or default_times.get(sesi, "07:30 - 09:30")
+                jam = jam_range or s.get("jam") or existing.get("jam") or default_times.get(sesi, "07:30 - 09:30")
                 mapel = s.get("keterangan") or s.get("mp") or existing.get("mapel", "-")
                 server = s.get("kd_server") or existing.get("kd_server", "-")
 
-                # 2. Pull Proktor if present in slot
+                # 2. Pull Proktor if present in slot (portal uses p2_nama, p2_nip)
                 proktor_id = existing.get("proktor_id")
-                if s.get("nm_proktor"):
+                proktor_nama = s.get("p2_nama") or s.get("nm_proktor")
+                proktor_nip = s.get("p2_nip") or s.get("nip_proktor") or ""
+                if proktor_nama:
                     p_off = self.add_or_get_officer(
-                        name=s["nm_proktor"],
-                        nip=s.get("nip_proktor", ""),
+                        name=proktor_nama,
+                        nip=proktor_nip,
                         role="PROKTOR"
                     )
                     if p_off:
@@ -386,12 +392,14 @@ class SignatureManager:
                 elif not proktor_id and default_proktor:
                     proktor_id = default_proktor.get("id")
 
-                # 3. Pull Pengawas if present in slot
+                # 3. Pull Pengawas if present in slot (portal uses p3_nama, p3_nip)
                 pengawas_id = existing.get("pengawas_id")
-                if s.get("nm_pengawas"):
+                pengawas_nama = s.get("p3_nama") or s.get("nm_pengawas")
+                pengawas_nip = s.get("p3_nip") or s.get("nip_pengawas") or ""
+                if pengawas_nama:
                     pw_off = self.add_or_get_officer(
-                        name=s["nm_pengawas"],
-                        nip=s.get("nip_pengawas", ""),
+                        name=pengawas_nama,
+                        nip=pengawas_nip,
                         role="PENGAWAS"
                     )
                     if pw_off:
@@ -399,16 +407,23 @@ class SignatureManager:
                         if not pw_off.get("was_skipped"):
                             officers_registered += 1
 
-                # 4. Pull Kepsek if present
+                # 4. Pull Kepsek if present (portal uses p1_nama, p1_nip)
                 kepsek_id = existing.get("kepsek_id") or (default_kepsek.get("id") if default_kepsek else "")
-                if s.get("nm_kepsek"):
+                kepsek_nama = s.get("p1_nama") or s.get("nm_kepsek")
+                kepsek_nip = s.get("p1_nip") or s.get("nip_kepsek") or ""
+                if kepsek_nama:
                     ks_off = self.add_or_get_officer(
-                        name=s["nm_kepsek"],
-                        nip=s.get("nip_kepsek", ""),
+                        name=kepsek_nama,
+                        nip=kepsek_nip,
                         role="KEPALA_SEKOLAH"
                     )
                     if ks_off:
                         kepsek_id = ks_off.get("id")
+                        if not self.data.get("school_profile", {}).get("kepsek_signature_id"):
+                            self.data["school_profile"]["kepsek_signature_id"] = kepsek_id
+                        self.data["school_profile"]["nama_kepsek"] = kepsek_nama
+                        if kepsek_nip:
+                            self.data["school_profile"]["nip_kepsek"] = kepsek_nip
 
                 assignment_data = {
                     "gelombang": gel,
