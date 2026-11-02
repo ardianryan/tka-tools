@@ -2,7 +2,7 @@
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 [![Build Status](https://github.com/ardianryan/tka-tools/actions/workflows/build.yml/badge.svg)](https://github.com/ardianryan/tka-tools/actions/workflows/build.yml)
-[![Version](https://img.shields.io/badge/Version-1.0.0-emerald.svg)](CHANGELOG.md)
+[![Version](https://img.shields.io/badge/Version-1.1.0-emerald.svg)](CHANGELOG.md)
 [![Platform](https://img.shields.io/badge/Platform-Windows%20%7C%20macOS%20%7C%20Linux-lightgrey.svg)](https://github.com/ardianryan/tka-tools/releases)
 [![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)](CONTRIBUTING.md)
 
@@ -49,7 +49,22 @@ Aplikasi desktop dan otomasi lokal sumber terbuka (*open-source*) untuk mempermu
    - **Loading Progress Bar Interaktif**: Menampilkan animasi progress bar realtime, persentase berkas, nama berkas & sesi/lab yang sedang diunggah, serta hitung mundur waktu jeda.
    - **Kontrol Penuh**: Tersedia tombol **Jeda (Pause)**, **Lanjutkan (Resume)**, dan **Hentikan (Stop)** kapan saja selama proses unggah berlangsung.
 
-5. **Pencatatan Audit & Pengarsipan Otomatis**
+5. **Injeksi Tanda Tangan & Stempel Resmi Otomatis (*BAP Only*)**
+   - Format vektor 100% otentik sesuai stylesheet resmi portal TKA Kemendikdasmen, lengkap dengan garis bawah nama/NIP dan garis dasar tanda tangan pena asli (*multiply blending*).
+   - Penempelan stempel cap basah sekolah transparan (skala, opasitas, rotasi alami) tumpang tindih di atas tanda tangan Kepala Sekolah.
+   - Master TTD Petugas dengan *Smart Deduplication*: Cukup unggah 1x per nama/NIP proktor atau pengawas.
+   - Ekspor format resmi PDF Vektor jernih dan cetak langsung (*direct print*) ke printer fisik.
+
+6. **Unggah Massal Sekali Klik (*Batch Direct Upload BAP*)**
+   - Mengunggah seluruh Berita Acara (BAP) yang status TTD-nya sudah lengkap ke portal TKA dalam satu kali klik.
+   - Modal progres interaktif dengan persentase bar, detail sesi aktif, audit log per slot, dan tombol pembatalan.
+   - **Kepatuhan Tanda Tangan Peserta (DH Compliance)**: Injeksi tanda tangan digital dibatasi ketat khusus untuk BAP. Daftar Hadir (DH) tetap wajib menggunakan pindaian scanner fisik ADF karena memuat tanda tangan asli siswa peserta ujian.
+
+7. **Visualisasi Thumbnail Foto Berkas & Interactive Lightbox Modal**
+   - Matriks jadwal 96 sesi portal menampilkan thumbnail foto fisik berkas nyata yang telah diunggah.
+   - Klik thumbnail untuk membuka penampil citra resolusi tinggi dengan kontrol perbesar (*zoom in/out*), rotasi (90°, 180°, 270°), dan cetak ulang.
+
+8. **Pencatatan Audit & Pengarsipan Otomatis**
    - Mencatat seluruh riwayat unggahan ke format spreadsheet CSV (`logs/riwayat_unggah.csv`) dan JSONL.
    - Otomatis membuat salinan arsip digital dengan format nama terstruktur di folder `processed/` (misal: `BAP_H1_S1_Lab1_TIMESTAMP.jpg`).
 

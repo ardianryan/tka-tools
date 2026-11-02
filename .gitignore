@@ -27,7 +27,7 @@ logs/*.csv
 logs/*.jsonl
 !logs/.gitkeep
 
-# Local Credentials & Secrets
+# Local Credentials & Secrets (Signatures, Stamps, Credentials are NEVER pushed)
 .env
 settings.json
 !settings.example.json
@@ -37,6 +37,8 @@ test_session_cookies.json
 signatures_data.json
 signatures/
 stamps/
+static/signatures/
+static/stamps/
 
 # Windows Shortcuts & OS Temp
 *.lnk

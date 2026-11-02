@@ -17,6 +17,9 @@ AppSupportURL={#MyAppURL}
 AppUpdatesURL={#MyAppURL}
 DefaultDirName={autopf}\{#MyAppName}
 DisableProgramGroupPage=yes
+CloseApplications=force
+CloseApplicationsFilter=*.exe
+RestartApplications=no
 ; PrivilegesRequired=lowest allows installation without admin prompt if needed
 PrivilegesRequired=lowest
 PrivilegesRequiredOverridesAllowed=dialog
@@ -46,6 +49,8 @@ Name: "{app}\processed"; Permissions: users-full
 Name: "{app}\processed\duplicates"; Permissions: users-full
 Name: "{app}\logs"; Permissions: users-full
 Name: "{app}\temp_uploads"; Permissions: users-full
+Name: "{app}\signatures"; Permissions: users-full
+Name: "{app}\stamps"; Permissions: users-full
 
 [Icons]
 Name: "{autoprograms}\{#MyAppName}"; Filename: "{app}\{#MyAppExeName}"; IconFilename: "{app}\favicon.ico"

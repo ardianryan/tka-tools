@@ -34,6 +34,21 @@ def normalize_nip(nip: str) -> str:
     digits = re.sub(r'\D', '', str(nip))
     return digits if len(digits) >= 8 else ""
 
+def extract_lab_number(ruang_str: str) -> int:
+    """
+    Accurately extracts Lab / Room number from portal string.
+    E.g. '01 - Lab 3' -> 3, '02 - Lab 4' -> 4, 'Lab 2' -> 2.
+    """
+    if not ruang_str:
+        return 1
+    m = re.search(r'(?:lab|laboratorium|ruang)\s*(\d+)', str(ruang_str), re.IGNORECASE)
+    if m:
+        return int(m.group(1))
+    nums = re.findall(r'\d+', str(ruang_str))
+    if nums:
+        return int(nums[-1])
+    return 1
+
 DEFAULT_DATA = {
     "officers": [],
     "stamp": {
@@ -48,7 +63,7 @@ DEFAULT_DATA = {
         "nama_sekolah": "SMAN 1 GEDEG",
         "npsn": "20502721",
         "nama_kepsek": "Li'ati, S.Pd., M.Mpd",
-        "nip_kepsek": "137011022007012010",
+        "nip_kepsek": "197011022007012010",
         "kepsek_signature_id": ""
     },
     "assignments": {}
@@ -66,6 +81,15 @@ class SignatureManager:
         SIGNATURES_DIR.mkdir(parents=True, exist_ok=True)
         STAMPS_DIR.mkdir(parents=True, exist_ok=True)
         
+        # Auto-correct any legacy 1370... typo to official 197011022007012010
+        if self.data.get("school_profile", {}).get("nip_kepsek") == "137011022007012010":
+            self.data["school_profile"]["nip_kepsek"] = "197011022007012010"
+        if self.data.get("school", {}).get("headmaster_nip") == "137011022007012010":
+            self.data["school"]["headmaster_nip"] = "197011022007012010"
+        for off in self.data.get("officers", []):
+            if off.get("nip") == "137011022007012010":
+                off["nip"] = "197011022007012010"
+
         # If no officers yet, initialize initial school officers based on school data
         if not self.data.get("officers"):
             # Sample default officers from BAP
@@ -81,7 +105,7 @@ class SignatureManager:
             )
             kepsek = self.add_or_get_officer(
                 name="Li'ati, S.Pd., M.Mpd",
-                nip="137011022007012010",
+                nip="197011022007012010",
                 role="KEPALA_SEKOLAH"
             )
             if kepsek and not self.data["school_profile"].get("kepsek_signature_id"):
@@ -142,6 +166,7 @@ class SignatureManager:
         """
         Adds a new officer or re-uses existing one if Name/NIP already matches.
         If Name/NIP exists and image_bytes is provided, updates signature image.
+        If NIP is updated (e.g. fixed on portal), updates existing officer's NIP.
         Returns dict with officer details and 'was_skipped' flag.
         """
         name = (name or "").strip()
@@ -151,6 +176,20 @@ class SignatureManager:
 
         existing = self.find_officer(name, nip)
         if existing:
+            changed = False
+            # Update NIP if provided and different
+            if nip and nip != existing.get("nip"):
+                existing["nip"] = nip
+                changed = True
+            # Update role if provided
+            if role and role.upper() != existing.get("role"):
+                existing["role"] = role.upper()
+                changed = True
+            # Update name formatting if changed
+            if name and name != existing.get("name"):
+                existing["name"] = name
+                changed = True
+
             # Update signature image if provided
             if image_bytes:
                 sig_fn = f"{existing['id']}.png"
@@ -162,6 +201,10 @@ class SignatureManager:
                 self._save()
                 return {**existing, "was_skipped": False, "updated": True}
             
+            if changed:
+                self._save()
+                return {**existing, "was_skipped": False, "updated": True}
+                
             # Re-used existing without upload
             return {**existing, "was_skipped": True}
 
@@ -209,7 +252,7 @@ class SignatureManager:
         # Check actual file existence for each signature
         for off in self.data.get("officers", []):
             fn = off.get("signature_filename")
-            off["has_signature"] = bool(fn and (SIGNATURES_DIR / fn).exists())
+            off["has_signature"] = bool(fn and ((SIGNATURES_DIR / fn).exists() or (BASE_DIR / "static" / "signatures" / fn).exists()))
         return self.data.get("officers", [])
 
     # ==========================
@@ -251,7 +294,7 @@ class SignatureManager:
     def get_stamp(self) -> dict:
         stamp = self.data.get("stamp", {})
         fn = stamp.get("file_name")
-        stamp["has_file"] = bool(fn and (STAMPS_DIR / fn).exists())
+        stamp["has_file"] = bool(fn and ((STAMPS_DIR / fn).exists() or (BASE_DIR / "static" / "stamps" / fn).exists()))
         return stamp
 
     # ==========================
@@ -262,15 +305,24 @@ class SignatureManager:
         curr.update(profile)
         self.data["school_profile"] = curr
         
-        # Ensure Kepsek exists in officers list
-        if curr.get("nama_kepsek"):
+        # Ensure Kepsek exists in officers list and keep NIP & name synced
+        kepsek_name = curr.get("nama_kepsek")
+        kepsek_nip = curr.get("nip_kepsek", "")
+        if kepsek_name:
             kepsek_off = self.add_or_get_officer(
-                name=curr["nama_kepsek"],
-                nip=curr.get("nip_kepsek", ""),
+                name=kepsek_name,
+                nip=kepsek_nip,
                 role="KEPALA_SEKOLAH"
             )
             if kepsek_off:
                 curr["kepsek_signature_id"] = kepsek_off.get("id")
+                # Directly update all matching officer entries
+                for off in self.data.get("officers", []):
+                    if off.get("id") == kepsek_off.get("id") or off.get("role") == "KEPALA_SEKOLAH":
+                        if kepsek_nip:
+                            off["nip"] = kepsek_nip
+                        if kepsek_name:
+                            off["name"] = kepsek_name
                 
         self._save()
         return curr
@@ -333,12 +385,20 @@ class SignatureManager:
         updated_count = 0
         officers_registered = 0
 
-        # Standard default exam dates map
-        default_dates = {
-            1: "26 Oktober 2026",
-            2: "27 Oktober 2026",
-            3: "28 Oktober 2026",
-            4: "29 Oktober 2026"
+        # Standard default exam dates map by Gelombang and Hari
+        default_dates_gel = {
+            1: {
+                1: "26 Oktober 2026",
+                2: "27 Oktober 2026",
+                3: "28 Oktober 2026",
+                4: "29 Oktober 2026"
+            },
+            2: {
+                1: "2 November 2026",
+                2: "3 November 2026",
+                3: "4 November 2026",
+                4: "5 November 2026"
+            }
         }
         default_times = {
             1: "07:30 - 09:30",
@@ -358,9 +418,8 @@ class SignatureManager:
                 sesi = int(s.get("sesi") or 1)
                 ruang_str = s.get("nm_ruang", "")
                 
-                # Extract Lab number
-                m_lab = re.search(r'(\d+)', ruang_str)
-                lab_num = int(m_lab.group(1)) if m_lab else 1
+                # Accurately extract true Lab number (e.g. '01 - Lab 3' -> 3)
+                lab_num = extract_lab_number(ruang_str)
                 
                 k = self.get_assignment_key(gel, hari, sesi, lab_num)
                 existing = self.data.setdefault("assignments", {}).get(k, {})
@@ -370,7 +429,8 @@ class SignatureManager:
                 if s.get("jam_mulai") and s.get("jam_selesai"):
                     jam_range = f"{s['jam_mulai']} - {s['jam_selesai']}"
 
-                tgl = s.get("tgl_pelaksanaan") or s.get("tanggal") or existing.get("tanggal") or default_dates.get(hari, "26 Oktober 2026")
+                tgl_fallback = default_dates_gel.get(gel, {}).get(hari, "26 Oktober 2026")
+                tgl = s.get("tgl_pelaksanaan") or s.get("tanggal") or existing.get("tanggal") or tgl_fallback
                 jam = jam_range or s.get("jam") or existing.get("jam") or default_times.get(sesi, "07:30 - 09:30")
                 mapel = s.get("keterangan") or s.get("mp") or existing.get("mapel", "-")
                 server = s.get("kd_server") or existing.get("kd_server", "-")
@@ -424,6 +484,10 @@ class SignatureManager:
                         self.data["school_profile"]["nama_kepsek"] = kepsek_nama
                         if kepsek_nip:
                             self.data["school_profile"]["nip_kepsek"] = kepsek_nip
+                            for off in self.data.get("officers", []):
+                                if off.get("id") == kepsek_id or off.get("role") == "KEPALA_SEKOLAH":
+                                    off["nip"] = kepsek_nip
+                                    off["name"] = kepsek_nama
 
                 assignment_data = {
                     "gelombang": gel,

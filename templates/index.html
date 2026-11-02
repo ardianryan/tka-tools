@@ -580,13 +580,13 @@
             <a class="nav-sidebar-link" onclick="switchNav('assignments')">
                 <i class="fa-solid fa-user-pen" style="width: 18px;"></i>
                 <span class="flex-grow-1">Penugasan Dinamis</span>
-                <span class="badge bg-primary-subtle text-primary border border-primary-subtle" style="font-size: 0.65rem;">v1.1</span>
+                
             </a>
 
             <a class="nav-sidebar-link" onclick="switchNav('signatures')">
                 <i class="fa-solid fa-signature" style="width: 18px;"></i>
                 <span class="flex-grow-1">TTD & Stempel</span>
-                <span class="badge bg-success-subtle text-success border border-success-subtle" style="font-size: 0.65rem;">Baru</span>
+                
             </a>
 
             <a class="nav-sidebar-link" onclick="switchNav('history')">
@@ -953,7 +953,7 @@
                 <div class="admin-card p-4">
                     <div class="d-flex flex-wrap justify-content-between align-items-center mb-3 gap-2">
                         <div>
-                            <h6 class="fw-bold mb-1"><i class="fa-solid fa-user-pen text-primary me-2"></i>Jadwal Penugasan & Tanggal Dinamis (v1.1)</h6>
+                            <h6 class="fw-bold mb-1"><i class="fa-solid fa-user-pen text-primary me-2"></i>Jadwal Penugasan & Tanggal Dinamis</h6>
                             <p class="text-secondary small mb-0">Atur tanggal pelaksanaan, nama pengawas, proktor per sesi secara dinamis sebelum dicetak atau diunggah.</p>
                         </div>
                         <div class="d-flex align-items-center gap-2">
@@ -964,6 +964,16 @@
                             <button class="btn btn-sm btn-outline-secondary" onclick="openBatchAssignmentModal()">
                                 <i class="fa-solid fa-layer-group me-1"></i> Ubah Massal
                             </button>
+                            <button class="btn btn-sm btn-success" onclick="openBatchDirectUploadModal()" title="Unggah seluruh Berita Acara yang TTD-nya sudah lengkap ke portal">
+                                <i class="fa-solid fa-cloud-arrow-up me-1"></i> Unggah Semua yang Siap
+                            </button>
+                        </div>
+                    </div>
+
+                    <div class="alert alert-info py-2 px-3 small d-flex align-items-center mb-3 rounded-3 border-info-subtle">
+                        <i class="fa-solid fa-circle-info text-primary fs-5 me-3"></i>
+                        <div>
+                            <strong>Penugasan & TTD Digital Khusus Berita Acara (BAP):</strong> Tanda tangan dan stempel resmi digital otomatis disematkan pada <strong>BAP</strong> untuk setiap sesi & lab. Untuk <strong>Daftar Hadir (DH)</strong>, wajib menggunakan lembar fisik bertanda tangan asli peserta.
                         </div>
                     </div>
 
@@ -979,7 +989,7 @@
                                     <th>Pengawas Ruang</th>
                                     <th>Proktor</th>
                                     <th class="text-center" style="width: 90px;">Status TTD</th>
-                                    <th class="text-center" style="width: 220px;">Aksi Cepat</th>
+                                    <th class="text-center" style="width: 220px;">Aksi BAP</th>
                                 </tr>
                             </thead>
                             <tbody id="assignmentsTableBody">
@@ -1011,7 +1021,7 @@
                                     </div>
                                     <div class="col-6">
                                         <label class="form-label small fw-semibold mb-1">NIP Kepala Sekolah</label>
-                                        <input type="text" class="form-control form-control-sm font-mono" id="cfgNipKepsek" placeholder="137011022007012010">
+                                        <input type="text" class="form-control form-control-sm font-mono" id="cfgNipKepsek" placeholder="197011022007012010">
                                     </div>
                                 </div>
                                 <div class="mb-3">
@@ -1577,8 +1587,8 @@
         const titleMap = {
             'queue': 'Antrean Berkas',
             'matrix': 'Jadwal Sesi Portal (96 Sesi)',
-            'assignments': 'Penugasan & Tanggal Dinamis (v1.1)',
-            'signatures': 'Master Tanda Tangan & Stempel Resmi (v1.1)',
+            'assignments': 'Penugasan & Tanggal Dinamis',
+            'signatures': 'Master Tanda Tangan & Stempel Resmi',
             'history': 'Riwayat Unggah',
             'upload': 'Impor Manual'
         };
@@ -3431,23 +3441,17 @@
                     </td>
                     <td class="text-center">
                         <div class="btn-group btn-group-sm">
-                            <button class="btn btn-outline-secondary" onclick="openEditAssignment('${a.gelombang}', '${a.hari}', '${a.sesi}', '${a.lab_num}')" title="Edit Tanggal & Petugas">
-                                <i class="fa-solid fa-pen"></i>
+                            <button class="btn btn-outline-secondary" onclick="openEditAssignment('${a.gelombang}', '${a.hari}', '${a.sesi}', '${a.lab_num}')" title="Edit Jadwal & Petugas BAP">
+                                <i class="fa-solid fa-pen-to-square me-1"></i>Edit
                             </button>
-                            <button class="btn btn-outline-primary" onclick="generateAndPrintDocument('BAP', ${a.gelombang}, ${a.hari}, ${a.sesi}, ${a.lab_num})" title="Cetak BAP Langsung">
-                                <i class="fa-solid fa-print me-1"></i>BAP
+                            <button class="btn btn-outline-primary" onclick="generateAndPrintDocument('BAP', ${a.gelombang}, ${a.hari}, ${a.sesi}, ${a.lab_num})" title="Cetak BAP Ber-TTD & Stempel Resmi">
+                                <i class="fa-solid fa-print me-1"></i>Cetak
                             </button>
-                            <button class="btn btn-outline-danger" onclick="downloadOfficialPdf('BAP', ${a.gelombang}, ${a.hari}, ${a.sesi}, ${a.lab_num})" title="Unduh Format Asli PDF BAP">
-                                <i class="fa-solid fa-file-pdf"></i>
+                            <button class="btn btn-outline-danger" onclick="downloadOfficialPdf('BAP', ${a.gelombang}, ${a.hari}, ${a.sesi}, ${a.lab_num})" title="Unduh Format Asli PDF BAP (Vektor Jernih)">
+                                <i class="fa-solid fa-file-pdf me-1"></i>PDF
                             </button>
-                            <button class="btn btn-outline-secondary" onclick="generateAndPrintDocument('DH', ${a.gelombang}, ${a.hari}, ${a.sesi}, ${a.lab_num})" title="Cetak Daftar Hadir Langsung">
-                                <i class="fa-solid fa-print me-1"></i>DH
-                            </button>
-                            <button class="btn btn-outline-danger" onclick="downloadOfficialPdf('DH', ${a.gelombang}, ${a.hari}, ${a.sesi}, ${a.lab_num})" title="Unduh Format Asli PDF DH">
-                                <i class="fa-solid fa-file-pdf"></i>
-                            </button>
-                            <button class="btn btn-success" onclick="generateAndUploadDocument('BAP', ${a.gelombang}, ${a.hari}, ${a.sesi}, ${a.lab_num})" title="Generate Citra Asli & Langsung Unggah">
-                                <i class="fa-solid fa-cloud-arrow-up"></i>
+                            <button class="btn btn-success" onclick="generateAndUploadDocument('BAP', ${a.gelombang}, ${a.hari}, ${a.sesi}, ${a.lab_num})" title="Generate Citra Asli & Langsung Unggah BAP ke Portal">
+                                <i class="fa-solid fa-cloud-arrow-up me-1"></i>Unggah
                             </button>
                         </div>
                     </td>
@@ -3619,6 +3623,204 @@
         }
     }
 
+
+    // ==========================================
+    // BATCH DIRECT UPLOAD (BAP)
+    // ==========================================
+    let isBatchUploading = false;
+    let abortBatchUpload = false;
+
+    function openBatchDirectUploadModal() {
+        updateBatchUploadStats();
+        document.getElementById("batchUploadSetupView").style.display = "block";
+        document.getElementById("batchUploadProgressView").style.display = "none";
+        document.getElementById("batchUploadCloseBtn").style.display = "";
+        const m = new bootstrap.Modal(document.getElementById("batchDirectUploadModal"));
+        m.show();
+    }
+
+    function updateBatchUploadStats() {
+        const selGel = document.getElementById("batchUploadGelSelect").value;
+        const skipUp = document.getElementById("batchUploadSkipUploaded").checked;
+
+        let readyCount = 0;
+        let notReadyCount = 0;
+
+        allAssignmentsList.forEach(a => {
+            if (selGel !== "ALL" && String(a.gelombang) !== String(selGel)) return;
+            const isReady = a.pengawas_has_sig && a.proktor_has_sig;
+            if (isReady) {
+                if (skipUp && typeof allSlotsList !== "undefined" && allSlotsList) {
+                    const matchSlot = allSlotsList.find(s => 
+                        String(s.gelombang || 1) === String(a.gelombang) &&
+                        String(s.hari || 1) === String(a.hari) &&
+                        String(s.sesi || 1) === String(a.sesi) &&
+                        extractLabNumber(s.nm_ruang || '') === Number(a.lab_num)
+                    );
+                    if (matchSlot && String(matchSlot.ada) === '1') {
+                        return;
+                    }
+                }
+                readyCount++;
+            } else {
+                notReadyCount++;
+            }
+        });
+
+        document.getElementById("batchUploadReadyCount").innerText = readyCount;
+        document.getElementById("batchUploadNotReadyCount").innerText = notReadyCount;
+        
+        const btn = document.getElementById("btnStartBatchUpload");
+        if (readyCount === 0) {
+            btn.disabled = true;
+            btn.innerHTML = `<i class="fa-solid fa-ban me-1"></i> Tidak Ada Sesi Siap`;
+        } else {
+            btn.disabled = false;
+            btn.innerHTML = `<i class="fa-solid fa-cloud-arrow-up me-1"></i> Mulai Unggah (${readyCount} Sesi)`;
+        }
+    }
+
+    function extractLabNumber(str) {
+        if (!str) return 1;
+        const m = str.match(/(\d+)/);
+        return m ? parseInt(m[1], 10) : 1;
+    }
+
+    async function startBatchDirectUpload() {
+        const selGel = document.getElementById("batchUploadGelSelect").value;
+        const skipUp = document.getElementById("batchUploadSkipUploaded").checked;
+
+        const itemsToUpload = [];
+        allAssignmentsList.forEach(a => {
+            if (selGel !== "ALL" && String(a.gelombang) !== String(selGel)) return;
+            if (a.pengawas_has_sig && a.proktor_has_sig) {
+                if (skipUp && typeof allSlotsList !== "undefined" && allSlotsList) {
+                    const matchSlot = allSlotsList.find(s => 
+                        String(s.gelombang || 1) === String(a.gelombang) &&
+                        String(s.hari || 1) === String(a.hari) &&
+                        String(s.sesi || 1) === String(a.sesi) &&
+                        extractLabNumber(s.nm_ruang || '') === Number(a.lab_num)
+                    );
+                    if (matchSlot && String(matchSlot.ada) === '1') {
+                        return;
+                    }
+                }
+                itemsToUpload.push(a);
+            }
+        });
+
+        if (itemsToUpload.length === 0) {
+            alert("Tidak ada sesi yang siap diunggah.");
+            return;
+        }
+
+        // Switch to progress view
+        document.getElementById("batchUploadSetupView").style.display = "none";
+        document.getElementById("batchUploadProgressView").style.display = "block";
+        document.getElementById("batchUploadCloseBtn").style.display = "none";
+        document.getElementById("btnCancelBatchUpload").style.display = "inline-block";
+        document.getElementById("btnDoneBatchUpload").style.display = "none";
+        document.getElementById("batchUploadSpinner").style.display = "inline-block";
+
+        const total = itemsToUpload.length;
+        let successCount = 0;
+        let failCount = 0;
+
+        isBatchUploading = true;
+        abortBatchUpload = false;
+
+        const logBox = document.getElementById("batchLogBox");
+        logBox.innerHTML = "";
+
+        const addLog = (msg, color = "text-secondary") => {
+            const div = document.createElement("div");
+            div.className = color + " py-1 border-bottom border-light";
+            div.innerText = `[${new Date().toLocaleTimeString()}] ${msg}`;
+            logBox.appendChild(div);
+            logBox.scrollTop = logBox.scrollHeight;
+        };
+
+        addLog(`Memulai proses unggah massal untuk ${total} sesi Berita Acara...`);
+
+        for (let i = 0; i < total; i++) {
+            if (abortBatchUpload) {
+                addLog("Proses unggah dihentikan oleh pengguna.", "text-warning fw-bold");
+                break;
+            }
+
+            const item = itemsToUpload[i];
+            const label = `G${item.gelombang} H${item.hari} S${item.sesi} ${item.nm_ruang || 'Lab ' + item.lab_num}`;
+            
+            document.getElementById("batchProgressSubtitle").innerText = `Mengunggah: ${label} (${item.pengawas_name || '-'})`;
+            const pct = Math.round(((i) / total) * 100);
+            document.getElementById("batchProgressBar").style.width = `${pct}%`;
+            document.getElementById("batchProgressStats").innerText = `${i} / ${total} Sesi`;
+            document.getElementById("batchProgressPercent").innerText = `${pct}%`;
+
+            try {
+                const res = await fetch("/api/document/direct_upload", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({
+                        doc_type: "BAP",
+                        gelombang: item.gelombang,
+                        hari: item.hari,
+                        sesi: item.sesi,
+                        lab_num: item.lab_num,
+                        skip_sync: true
+                    })
+                });
+                const data = await res.json();
+                if (data.success) {
+                    successCount++;
+                    addLog(`✓ ${label} berhasil diunggah ke portal`, "text-success fw-semibold");
+                } else {
+                    failCount++;
+                    addLog(`✗ ${label}: ${data.msg || 'Gagal'}`, "text-danger");
+                }
+            } catch (err) {
+                failCount++;
+                addLog(`✗ ${label}: Error jaringan (${err.message})`, "text-danger");
+            }
+
+            // Brief 150ms delay
+            await new Promise(r => setTimeout(r, 150));
+        }
+
+        isBatchUploading = false;
+        document.getElementById("batchProgressBar").style.width = "100%";
+        document.getElementById("batchProgressStats").innerText = `${successCount + failCount} / ${total} Sesi`;
+        document.getElementById("batchProgressPercent").innerText = "100%";
+        document.getElementById("batchUploadSpinner").style.display = "none";
+        document.getElementById("btnCancelBatchUpload").style.display = "none";
+        document.getElementById("btnDoneBatchUpload").style.display = "inline-block";
+        document.getElementById("batchUploadCloseBtn").style.display = "";
+
+        document.getElementById("batchProgressTitle").innerText = "Proses Unggah Massal Selesai";
+        document.getElementById("batchProgressSubtitle").innerText = `Berhasil: ${successCount} | Gagal: ${failCount}`;
+        addLog(`Selesai! Berhasil: ${successCount}, Gagal: ${failCount}`, "text-primary fw-bold");
+
+        // Sync portal slots once at the end
+        try {
+            await fetch("/api/assignments/sync_portal", { method: "POST" });
+        } catch (e) {}
+    }
+
+    function cancelBatchDirectUpload() {
+        if (confirm("Hentikan proses unggah massal?")) {
+            abortBatchUpload = true;
+        }
+    }
+
+    function finishBatchDirectUpload() {
+        const modalEl = document.getElementById("batchDirectUploadModal");
+        const modal = bootstrap.Modal.getInstance(modalEl);
+        if (modal) modal.hide();
+        loadAssignments();
+        loadSlots();
+        loadHistory();
+    }
+
 </script>
 
 <!-- PHOTO LIGHTBOX MODAL -->
@@ -3700,6 +3902,97 @@
                         <button type="submit" class="btn btn-primary btn-sm px-3">Simpan Perubahan</button>
                     </div>
                 </form>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- BATCH DIRECT UPLOAD MODAL -->
+<div class="modal fade" id="batchDirectUploadModal" tabindex="-1" data-bs-backdrop="static">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content border-0 shadow">
+            <div class="modal-header py-3 px-4 bg-light border-bottom">
+                <h6 class="modal-title fw-bold mb-0">
+                    <i class="fa-solid fa-cloud-arrow-up text-success me-2"></i>Unggah Berita Acara yang Sudah Siap
+                </h6>
+                <button type="button" class="btn-close" id="batchUploadCloseBtn" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body p-4">
+                <div id="batchUploadSetupView">
+                    <div class="alert alert-info py-2 px-3 small rounded-3 mb-3 border-info-subtle">
+                        <i class="fa-solid fa-circle-info me-1"></i> Sistem akan secara otomatis membubuhkan tanda tangan pengawas, proktor, penanggung jawab, serta stempel resmi ke setiap lembar BAP, lalu mengunggahnya langsung ke server portal TKA.
+                    </div>
+
+                    <div class="row g-2 mb-3">
+                        <div class="col-6">
+                            <div class="p-3 bg-light rounded-3 text-center border">
+                                <div class="text-secondary small">Sesi Siap Diunggah</div>
+                                <div class="fs-4 fw-bold text-success font-mono" id="batchUploadReadyCount">0</div>
+                            </div>
+                        </div>
+                        <div class="col-6">
+                            <div class="p-3 bg-light rounded-3 text-center border">
+                                <div class="text-secondary small">Kurang TTD (Belum Siap)</div>
+                                <div class="fs-4 fw-bold text-secondary font-mono" id="batchUploadNotReadyCount">0</div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="mb-3">
+                        <label class="form-label small fw-semibold mb-1">Pilih Gelombang</label>
+                        <select id="batchUploadGelSelect" class="form-select form-select-sm font-mono" onchange="updateBatchUploadStats()">
+                            <option value="ALL">Semua Gelombang</option>
+                            <option value="1">Gelombang 1</option>
+                            <option value="2">Gelombang 2</option>
+                            <option value="3">Gelombang 3</option>
+                        </select>
+                    </div>
+
+                    <div class="form-check form-switch mb-3">
+                        <input class="form-check-input" type="checkbox" id="batchUploadSkipUploaded" onchange="updateBatchUploadStats()">
+                        <label class="form-check-label small" for="batchUploadSkipUploaded">
+                            Lewati sesi yang sudah terunggah di portal TKA
+                        </label>
+                    </div>
+
+                    <div class="d-grid mt-4">
+                        <button class="btn btn-success" id="btnStartBatchUpload" onclick="startBatchDirectUpload()">
+                            <i class="fa-solid fa-cloud-arrow-up me-1"></i> Mulai Unggah Sekarang
+                        </button>
+                    </div>
+                </div>
+
+                <!-- PROGRESS VIEW -->
+                <div id="batchUploadProgressView" style="display: none;">
+                    <div class="text-center mb-3">
+                        <div class="spinner-border text-success mb-2" id="batchUploadSpinner" role="status" style="width: 2.5rem; height: 2.5rem;">
+                            <span class="visually-hidden">Loading...</span>
+                        </div>
+                        <h6 class="fw-bold mb-1" id="batchProgressTitle">Sedang Mengunggah Berita Acara...</h6>
+                        <p class="text-secondary small mb-2" id="batchProgressSubtitle">Menyiapkan antrean...</p>
+                    </div>
+
+                    <div class="progress mb-3" style="height: 12px; border-radius: 6px;">
+                        <div class="progress-bar progress-bar-striped progress-bar-animated bg-success" id="batchProgressBar" role="progressbar" style="width: 0%"></div>
+                    </div>
+                    
+                    <div class="d-flex justify-content-between small text-secondary font-mono mb-2">
+                        <span id="batchProgressStats">0 / 0 Sesi</span>
+                        <span id="batchProgressPercent">0%</span>
+                    </div>
+
+                    <div class="border rounded-2 p-2 bg-light font-mono small" id="batchLogBox" style="max-height: 160px; overflow-y: auto; font-size: 0.75rem;">
+                    </div>
+
+                    <div class="mt-3 text-end" id="batchUploadFooterActions">
+                        <button class="btn btn-outline-danger btn-sm" id="btnCancelBatchUpload" onclick="cancelBatchDirectUpload()">
+                            <i class="fa-solid fa-stop me-1"></i> Hentikan
+                        </button>
+                        <button class="btn btn-primary btn-sm" id="btnDoneBatchUpload" style="display: none;" onclick="finishBatchDirectUpload()">
+                            <i class="fa-solid fa-check me-1"></i> Selesai
+                        </button>
+                    </div>
+                </div>
             </div>
         </div>
     </div>

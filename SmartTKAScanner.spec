@@ -34,6 +34,7 @@ hidden_imports = [
     'packaging.version',
     'signature_manager',
     'stamp_engine',
+    'pypdfium2',
 ]
 
 if sys.platform.startswith('win'):

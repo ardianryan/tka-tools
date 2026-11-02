@@ -9,21 +9,52 @@ Format berkas ini mengacu pada [Keep a Changelog](https://keepachangelog.com/id/
 ## [1.1.0] - 2026-11-02
 
 ### Ditambahkan (Added)
+- **Fitur Unggah Massal Berita Acara yang Sudah Siap (*Batch Direct Upload BAP*)**:
+  - Penambahan tombol hijau **"Unggah Semua yang Siap"** pada toolbar *Penugasan Dinamis* untuk mengunggah puluhan berkas BAP secara berurutan dalam satu kali klik.
+  - **Smart Readiness Filter**: Mendeteksi secara otomatis semua sesi yang memiliki status tanda tangan **Lengkap** (proktor dan pengawas ruang sudah memiliki berkas TTD aktif).
+  - **Pilihan Gelombang & Opsi Skip**: Mendukung filter pengunggahan berdasarkan gelombang tertentu (*Semua Gelombang*, *Gelombang 1*, *Gelombang 2*, atau *Gelombang 3*) serta opsi opsional *"Lewati sesi yang sudah terunggah di portal TKA"*.
+  - **Modal Progres Real-Time Interaktif**: Menampilkan animasi progress bar dinamis, persentase penyelesaian, label sesi dan petugas yang sedang diproses, serta log detail audit per sesi.
+  - **Kontrol Pengguna Penuh**: Pengguna dapat menekan tombol **Hentikan** kapan saja untuk membatalkan proses unggah massal tanpa merusak data yang sudah terunggah.
+  - **Optimalisasi Jaringan & Eksekusi Cepat**: Menggunakan flag `skip_sync: true` selama proses batch upload berlangsung agar aplikasi tidak melakukan fetch ulang matriks 96 slot portal pada setiap lembar, lalu melakukan sinkronisasi menyeluruh satu kali di akhir proses.
 - **Mesin Penempelan Tanda Tangan & Stempel Resmi Otomatis (*Authentic Document & Digital Stamp Engine*)**:
   - **Format Resmi Vektor & Cetak Asli dari Portal TKA**: Menghilangkan metode overlay gambar lama (tanpa kotak putih / teks timpaan buatan). Sistem kini mengadopsi 100% tata letak dan stylesheet resmi portal TKA (`cetak.min.css`), menyematkan tanda tangan dan cap basah secara alami dengan teknik perpaduan tinta (*multiply blending*).
   - **Ekspor Dokumen Vektor PDF & Cetak Langsung**: Mendukung pembuatan berkas PDF resmi berkualitas tinggi (*vector PDF*) dan cetak langsung ke printer fisik (*direct print*) untuk Berita Acara (BAP) dan Daftar Hadir (DH).
   - **Sinkronisasi Otomatis Petugas Nyata dari Portal**: Sistem secara dinamis menarik nama dan NIP Kepala Sekolah (`p1_nama`), Proktor (`p2_nama`), serta Pengawas Ruang (`p3_nama`) yang telah terdaftar resmi di portal TKA tanpa perlu entri manual.
   - **Master TTD Petugas dengan Smart Deduplication**: Cukup unggah berkas tanda tangan sekali per nama/NIP. Jika ada kesamaan nama atau NIP, sistem secara otomatis melewati (*skip*) dan langsung mengaitkan tanda tangan yang sudah tersimpan tanpa perlu mengunggah ulang.
   - **Stempel Cap Basah Sekolah**: Mendukung unggah stempel sekolah (PNG transparan) dengan kontrol ukuran (*scale*), kepekatan tinta (*opacity*), dan sudut rotasi alami ($-2^\circ$ s/d $-5^\circ$) yang otomatis ditempelkan tumpang tindih (*overlap*) di atas tanda tangan Kepala Sekolah / Penanggung Jawab.
-  - **Pencetakan Langsung ke Printer (*Direct Print Ready*)**: Dokumen Berita Acara Pelaksanaan (BAP) dan Daftar Hadir (DH) langsung keluar dari printer fisik lengkap dengan tanda tangan proktor, pengawas sesi bersangkutan, kepala sekolah, dan cap stempel sekolah.
+  - **Pencetakan Langsung ke Printer (*Direct Print Ready*)**: Dokumen Berita Acara Pelaksanaan (BAP) langsung keluar dari printer fisik lengkap dengan tanda tangan proktor, pengawas sesi bersangkutan, kepala sekolah, dan cap stempel sekolah.
   - **Render JPG Standar Portal & Auto-Upload**: Dokumen ber-TTD dan berstempel langsung dikonversi menjadi citra JPG beresolusi standar (200 DPI, $\le 1$ MB) dan dapat langsung diunggah otomatis ke portal TKA Kemendikdasmen tanpa perlu pemindaian ulang via ADF scanner.
 - **Tarik Data Dinamis Pengawas, Proktor, & Tanggal Pelaksanaan**:
   - Mendukung penarikan data jadwal, tanggal pelaksanaan, dan nama petugas secara otomatis dari dashboard/slot portal TKA.
-  - Tabel antarmuka *Penugasan & Tanggal Dinamis* untuk penyesuaian fleksibel per sesi (mengganti nama pengawas, proktor, jam, atau tanggal jika ada perubahan jadwal dinas di lapangan).
+  - Tabel antarmuka *Penugasan Dinamis* untuk penyesuaian fleksibel per sesi (mengganti nama pengawas, proktor, jam, atau tanggal jika ada perubahan jadwal dinas di lapangan).
   - Fitur *Ubah Massal (Batch Update)* untuk menerapkan tanggal pelaksanaan atau nama pengawas ke seluruh sesi dalam satu hari/gelombang secara instan.
 - **Visualisasi Thumbnail Foto Berkas pada Matriks Jadwal Sesi Portal**:
   - Kolom Berita Acara (BAP) dan Daftar Hadir (DH) pada tabel Matriks 96 Sesi Ujian kini tidak hanya menampilkan status teks `"Sudah"`, melainkan menampilkan **thumbnail foto fisik berkas nyata** yang telah diunggah.
   - **Interactive Lightbox Modal**: Klik pada thumbnail foto langsung membuka penampil citra resolusi penuh dengan kontrol perbesar (*zoom in/out*), rotasi (90°, 180°, 270°), inspeksi detail waktu unggah/ukuran berkas, serta tombol unduh atau cetak ulang berkas.
+
+### Diperbaiki (Fixed)
+- **Autentisitas & Presisi Tata Letak Dokumen Berita Acara (BAP)**:
+  - **Garis Bawah Nama & NIP Petugas**: Menambahkan garis bawah autentik (`.officer-val-line`) pada nama proktor, pengawas, penanggung jawab, serta NIP masing-masing persis sesuai format lembar cetak asli portal TKA.
+  - **Garis Dasar Tanda Tangan Permanen (*Permanent Signature Baseline*)**: Menambahkan garis titik-titik/solid permanen (`.sig-rule`) di kolom TTD agar citra tanda tangan menempel tepat di atas garis seperti tanda tangan pena asli, bukan mengambang tanpa garis.
+  - **Pencegahan Teks ID Server & Ruang Merosot ke Bawah**: Memperbaiki pembagian lebar kolom tabel metadata identitas dan menerapkan pengaturan fleksibel `white-space: nowrap !important` dengan format nomor lab yang disederhanakan (`Lab 1` dsb) sehingga ID Server dan Ruang selalu sejajar pada baris yang sama.
+  - **Pencegahan Margin Kanan Terpotong (*Right Margin Clipping Prevention*)**: Menerapkan aturan `box-sizing: border-box !important` dan padding margin simetris A4 (15mm / 89px kiri-kanan), memastikan seluruh batas tepi tabel, garis pembatas, dan catatan di sudut kanan bawah tidak terpotong saat dicetak maupun dirender ke format gambar JPG.
+  - **Pembersihan Redundansi NIP Ganda**: Menambahkan fungsi sanitasi regex `clean_officer_nip()` pada mesin stempel untuk memangkas duplikasi awalan `NIP.` atau `NIP: ` (misal `"NIP. NIP. 197804222024211001"` menjadi angka bersih `197804222024211001`), mencegah teks NIP terpotong menjadi dua baris canggung.
+- **Penanganan Kesalahan Endpoint Dokumen & Pemetaan Slot Presisi**:
+  - Menyelesaikan galat *500 Internal Server Error* pada endpoint `/document/print/...` dan `/document/pdf/...`.
+  - Mengimplementasikan pencocokan slot cerdas `find_matching_slot()` yang mengekstrak nomor laboratorium riil dari teks ruangan (misal `'01 - Lab 3'` secara akurat dipetakan ke Lab 3).
+  - Memperbaiki penanganan dictionary pada endpoint `/api/document/batch_direct_upload` yang sebelumnya mengalami `AttributeError: 'str' object has no attribute 'get'`.
+
+### Keamanan & Kepatuhan (Security & Compliance)
+- **Integritas Tanda Tangan Fisik Daftar Hadir (DH Compliance Policy)**:
+  - Pembatasan ketat sistem injeksi TTD digital: penempelan tanda tangan digital **eksklusif hanya diperbolehkan untuk Berita Acara (BAP)**.
+  - Seluruh dokumen Daftar Hadir (DH) tetap wajib dipindai secara fisik melalui scanner ADF/Flatbed karena memerlukan tanda tangan basah asli dari para siswa/peserta ujian.
+  - Endpoint backend `/api/document/direct_upload` dan `/api/document/batch_direct_upload` secara ketat menolak permintaan selain `doc_type == "BAP"`.
+
+### Diubah / Disederhanakan (Changed)
+- **Pembersihan Antarmuka & Anti-Oversharing Versi (UI Hygiene)**:
+  - Menghapus badge `v1.1` pada menu navigasi *Penugasan Dinamis* dan badge `Baru` pada menu *TTD & Stempel*.
+  - Menghilangkan teks versi berulang `(v1.1)` pada header atas, judul card (*Jadwal Penugasan & Tanggal Dinamis*), judul profil (*Master Tanda Tangan & Stempel Resmi*), serta header kolom tabel (*Aksi BAP*).
+  - Tampilan versi kini disatukan secara elegan hanya pada satu tempat di header aplikasi (`v1.1.0`).
 
 ---
 

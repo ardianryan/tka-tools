@@ -45,8 +45,44 @@ from folder_watcher import FolderWatcher
 from upload_logger import record_upload, get_history
 from settings_manager import load_settings, save_settings
 from updater import update_checker, in_app_updater
-from signature_manager import signature_manager, normalize_name, normalize_nip
+from signature_manager import signature_manager, normalize_name, normalize_nip, extract_lab_number
 from stamp_engine import stamp_engine
+
+def find_matching_slot(slots: list, gelombang: int, hari: int, sesi: int, lab_num: int) -> dict:
+    """
+    Accurately matches a portal slot by Gelombang, Hari, Sesi, and true Lab/Room number.
+    Extracts the true lab number from 'nm_ruang' (e.g. '01 - Lab 3' -> Lab 3).
+    """
+    g_target = int(gelombang or 1)
+    h_target = int(hari or 1)
+    s_target = int(sesi or 1)
+    l_target = int(lab_num or 1)
+
+    # 1. Exact match: gelombang, hari, sesi, lab
+    for s in slots:
+        g = int(s.get("gelombang") or 1)
+        h = int(s.get("hari") or 1)
+        ses = int(s.get("sesi") or 1)
+        lab = extract_lab_number(s.get("nm_ruang", ""))
+        if g == g_target and h == h_target and ses == s_target and lab == l_target:
+            return s
+            
+    # 2. Match hari, sesi, lab (if gelombang is unassigned or single)
+    for s in slots:
+        h = int(s.get("hari") or 1)
+        ses = int(s.get("sesi") or 1)
+        lab = extract_lab_number(s.get("nm_ruang", ""))
+        if h == h_target and ses == s_target and lab == l_target:
+            return s
+
+    # 3. Match hari, sesi
+    for s in slots:
+        h = int(s.get("hari") or 1)
+        ses = int(s.get("sesi") or 1)
+        if h == h_target and ses == s_target:
+            return s
+
+    return {}
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(name)s: %(message)s")
 logger = logging.getLogger("SmartTKAServer")
@@ -682,8 +718,7 @@ def api_matrix_slots_with_photos():
         slot_copy = dict(s)
         h = int(s.get("hari") or 1)
         ses = int(s.get("sesi") or 1)
-        m_lab = re.search(r'(\d+)', s.get("nm_ruang", ""))
-        lab = int(m_lab.group(1)) if m_lab else 1
+        lab = extract_lab_number(s.get("nm_ruang", ""))
         
         photo = photo_index.get(("BAP", h, ses, lab))
         if photo:
@@ -700,8 +735,7 @@ def api_matrix_slots_with_photos():
         slot_copy = dict(s)
         h = int(s.get("hari") or 1)
         ses = int(s.get("sesi") or 1)
-        m_lab = re.search(r'(\d+)', s.get("nm_ruang", ""))
-        lab = int(m_lab.group(1)) if m_lab else 1
+        lab = extract_lab_number(s.get("nm_ruang", ""))
         
         photo = photo_index.get(("DH", h, ses, lab))
         if photo:
@@ -807,6 +841,10 @@ def api_signatures_school_profile():
 @app.route("/api/assignments")
 def api_assignments_get():
     assignments = signature_manager.get_all_assignments()
+    if not assignments and cached_slots.get("bap"):
+        signature_manager.sync_from_portal_slots(cached_slots["bap"], cached_slots.get("dh"))
+        assignments = signature_manager.get_all_assignments()
+        
     officers = {o["id"]: o for o in signature_manager.list_officers()}
     stamp = signature_manager.get_stamp()
     
@@ -885,7 +923,7 @@ def api_document_generate():
     }
     
     slots = cached_slots["bap"] if doc_type == "BAP" else cached_slots["dh"]
-    slot_match = next((s for s in slots if str(s.get("hari")) == str(hari) and str(s.get("sesi")) == str(sesi)), {})
+    slot_match = find_matching_slot(slots, gel, hari, sesi, lab)
     
     try:
         if doc_type == "BAP":
@@ -938,6 +976,12 @@ def api_document_generate():
 def api_document_direct_upload():
     data = request.get_json(silent=True) or {}
     doc_type = (data.get("doc_type") or "BAP").upper()
+    if doc_type != "BAP":
+        return jsonify({
+            "success": False,
+            "msg": "Injeksi tanda tangan & stempel digital hanya diizinkan untuk Berita Acara (BAP). Daftar Hadir (DH) harus menggunakan dokumen fisik bertanda tangan asli peserta ujian."
+        }), 400
+
     gel = int(data.get("gelombang") or 1)
     hari = int(data.get("hari") or 1)
     sesi = int(data.get("sesi") or 1)
@@ -946,18 +990,17 @@ def api_document_direct_upload():
     ass = signature_manager.get_assignment(gel, hari, sesi, lab) or {
         "gelombang": gel, "hari": hari, "sesi": sesi, "lab_num": lab
     }
-    slots = cached_slots["bap"] if doc_type == "BAP" else cached_slots["dh"]
-    slot_match = next((s for s in slots if str(s.get("hari")) == str(hari) and str(s.get("sesi")) == str(sesi)), None)
+    slots = cached_slots["bap"]
+    slot_match = find_matching_slot(slots, gel, hari, sesi, lab)
     if not slot_match:
-        return jsonify({"success": False, "msg": "Jadwal slot pada portal TKA tidak ditemukan untuk sesi ini."}), 400
+        return jsonify({
+            "success": False,
+            "msg": f"Jadwal slot pada portal TKA tidak ditemukan untuk Gelombang {gel}, Hari {hari}, Sesi {sesi}, Lab {lab}."
+        }), 400
         
     try:
-        if doc_type == "BAP":
-            img, file_path = stamp_engine.stamp_bap(slot_match, ass)
-            res = tka_client.upload_pelaksanaan(slot_match, file_path)
-        else:
-            img, file_path = stamp_engine.stamp_dh(slot_match, ass)
-            res = tka_client.upload_absen(slot_match, file_path)
+        img, file_path = stamp_engine.stamp_bap(slot_match, ass)
+        res = tka_client.upload_pelaksanaan(slot_match, file_path)
             
         if res.get("success"):
             record_upload({
@@ -973,13 +1016,74 @@ def api_document_direct_upload():
                 "matched_slot": slot_match
             }, status="SUKSES", portal_msg=res.get("msg", "Berhasil diunggah ke portal TKA"))
             
-            sync_portal_slots()
+            skip_sync = bool(data.get("skip_sync", False))
+            if not skip_sync:
+                sync_portal_slots()
             return jsonify({"success": True, "msg": f"Dokumen {doc_type} berhasil diunggah langsung ke portal TKA!"})
         else:
             return jsonify({"success": False, "msg": res.get("msg", "Gagal unggah ke server portal TKA.")}), 400
     except Exception as e:
         logger.error("Direct upload failed: %s", e)
         return jsonify({"success": False, "msg": str(e)}), 500
+
+
+@app.route("/api/document/batch_direct_upload", methods=["POST"])
+def api_document_batch_direct_upload():
+    data = request.get_json(silent=True) or {}
+    doc_type = (data.get("doc_type") or "BAP").upper()
+    if doc_type != "BAP":
+        return jsonify({
+            "success": False,
+            "msg": "Injeksi tanda tangan & stempel digital hanya diizinkan untuk Berita Acara (BAP)."
+        }), 400
+
+    target_gel = data.get("gelombang")
+    skip_uploaded = bool(data.get("skip_uploaded", False))
+    
+    all_ass = signature_manager.get_all_assignments()
+    officers = {o["id"]: o for o in signature_manager.list_officers()}
+    slots = cached_slots["bap"]
+    
+    ready_items = []
+    for k, ass in all_ass.items():
+        if target_gel and str(target_gel) != "ALL" and str(ass.get("gelombang")) != str(target_gel):
+            continue
+            
+        p_off = officers.get(ass.get("proktor_id"))
+        pw_off = officers.get(ass.get("pengawas_id"))
+        proktor_has_sig = p_off.get("has_signature", False) if p_off else False
+        pengawas_has_sig = pw_off.get("has_signature", False) if pw_off else False
+        
+        if not (proktor_has_sig and pengawas_has_sig):
+            continue
+            
+        g = int(ass.get("gelombang") or 1)
+        h = int(ass.get("hari") or 1)
+        s = int(ass.get("sesi") or 1)
+        l = int(ass.get("lab_num") or 1)
+        
+        slot_match = find_matching_slot(slots, g, h, s, l)
+        if not slot_match:
+            continue
+            
+        if skip_uploaded and str(slot_match.get("ada")) == "1":
+            continue
+            
+        ready_items.append({
+            "gelombang": g,
+            "hari": h,
+            "sesi": s,
+            "lab_num": l,
+            "nm_ruang": ass.get("nm_ruang", f"Lab {l}"),
+            "pengawas_name": pw_off.get("name") if pw_off else "-",
+            "proktor_name": p_off.get("name") if p_off else "-"
+        })
+        
+    return jsonify({
+        "success": True,
+        "count": len(ready_items),
+        "items": ready_items
+    })
 
 @app.route("/document/print/<doc_type>/<int:gelombang>/<int:hari>/<int:sesi>/<int:lab_num>")
 def document_print_view(doc_type, gelombang, hari, sesi, lab_num):
@@ -988,7 +1092,7 @@ def document_print_view(doc_type, gelombang, hari, sesi, lab_num):
         "gelombang": gelombang, "hari": hari, "sesi": sesi, "lab_num": lab_num
     }
     slots = cached_slots["bap"] if doc_type == "BAP" else cached_slots["dh"]
-    slot_match = next((s for s in slots if str(s.get("hari")) == str(hari) and str(s.get("sesi")) == str(sesi)), {})
+    slot_match = find_matching_slot(slots, gelombang, hari, sesi, lab_num)
     
     try:
         if doc_type == "BAP":
@@ -1006,7 +1110,7 @@ def document_pdf_view(doc_type, gelombang, hari, sesi, lab_num):
         "gelombang": gelombang, "hari": hari, "sesi": sesi, "lab_num": lab_num
     }
     slots = cached_slots["bap"] if doc_type == "BAP" else cached_slots["dh"]
-    slot_match = next((s for s in slots if str(s.get("hari")) == str(hari) and str(s.get("sesi")) == str(sesi)), {})
+    slot_match = find_matching_slot(slots, gelombang, hari, sesi, lab_num)
 
     try:
         pdf_path = stamp_engine.render_pdf(doc_type, slot_match, ass)
@@ -1336,13 +1440,31 @@ def download_riwayat_csv():
 @app.route("/preview/<path:filepath>")
 def serve_image(filepath):
     try:
-        p = Path(filepath).resolve()
-        if not (p.is_relative_to(BASE_DIR) or p.is_relative_to(USER_DATA_DIR)):
-            return "Akses ditolak: di luar direktori kerja.", 403
-        if p.suffix.lower() not in ALLOWED_EXTENSIONS:
-            return "Format berkas tidak diizinkan.", 400
-        if p.exists() and p.is_file():
-            return send_from_directory(p.parent, p.name)
+        clean_p = filepath.replace("\\", "/").strip("/")
+        target_candidates = []
+        
+        if clean_p.startswith("signatures/") or clean_p.startswith("stamps/"):
+            fname = clean_p.split("/", 1)[1]
+            target_candidates.extend([
+                SIGNATURES_DIR / fname,
+                STAMPS_DIR / fname,
+                BASE_DIR / "static" / "signatures" / fname,
+                BASE_DIR / "static" / "stamps" / fname
+            ])
+            
+        target_candidates.extend([
+            (BASE_DIR / clean_p).resolve(),
+            (USER_DATA_DIR / clean_p).resolve(),
+            Path(filepath).resolve()
+        ])
+        
+        for cand in target_candidates:
+            if cand.exists() and cand.is_file():
+                if (cand.is_relative_to(BASE_DIR) or cand.is_relative_to(USER_DATA_DIR) or 
+                    cand.is_relative_to(SIGNATURES_DIR) or cand.is_relative_to(STAMPS_DIR)):
+                    if cand.suffix.lower() in ALLOWED_EXTENSIONS:
+                        return send_from_directory(cand.parent, cand.name)
+                        
         return "Berkas tidak ditemukan.", 404
     except Exception as e:
         return f"Error: {str(e)}", 400

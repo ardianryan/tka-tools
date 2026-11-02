@@ -13,7 +13,7 @@ from PIL import Image, ImageEnhance
 from config import (
     BASE_DIR, RESOURCE_DIR, USER_DATA_DIR, SIGNATURES_DIR, STAMPS_DIR, GENERATED_DOCS_DIR
 )
-from signature_manager import signature_manager
+from signature_manager import signature_manager, extract_lab_number
 
 logger = logging.getLogger("StampEngine")
 
@@ -59,10 +59,30 @@ class StampEngine:
         if not self.browser_exe:
             logger.warning("No Edge/Chrome executable found. PDF/screenshot generation will fallback.")
 
+    def _get_tutwuri_b64(self) -> str:
+        """Loads tutwuri.jpg as Base64 data URI so it never fails or breaks in headless mode."""
+        candidates = [
+            BASE_DIR / "static" / "tka_assets" / "tutwuri.jpg",
+            Path(__file__).parent / "static" / "tka_assets" / "tutwuri.jpg",
+            BASE_DIR / "_internal" / "static" / "tka_assets" / "tutwuri.jpg",
+        ]
+        for c in candidates:
+            if c.exists():
+                try:
+                    with open(c, "rb") as f:
+                        data = base64.b64encode(f.read()).decode("ascii")
+                        return f"data:image/jpeg;base64,{data}"
+                except Exception:
+                    pass
+        return "/static/tka_assets/tutwuri.jpg"
+
     def _prepare_signature_b64(self, sig_path: Path) -> str:
         """Prepares transparent signature image as base64 data URI."""
         if not sig_path or not sig_path.exists():
-            return ""
+            if sig_path and (BASE_DIR / "static" / "signatures" / sig_path.name).exists():
+                sig_path = BASE_DIR / "static" / "signatures" / sig_path.name
+            else:
+                return ""
         try:
             sig = Image.open(sig_path).convert("RGBA")
             sig = make_transparent(sig)
@@ -74,7 +94,10 @@ class StampEngine:
     def _prepare_stamp_b64(self, stamp_path: Path, scale: float = 1.0, opacity: float = 0.88, rotation: float = -3.5) -> dict:
         """Prepares transparent school stamp as base64 data URI with styling metadata."""
         if not stamp_path or not stamp_path.exists():
-            return {"uri": "", "scale": 1.0, "opacity": 0.88, "rotation": -3.5}
+            if stamp_path and (BASE_DIR / "static" / "stamps" / stamp_path.name).exists():
+                stamp_path = BASE_DIR / "static" / "stamps" / stamp_path.name
+            else:
+                return {"uri": "", "scale": 1.0, "opacity": 0.88, "rotation": -3.5}
         try:
             stamp = Image.open(stamp_path).convert("RGBA")
             stamp = make_transparent(stamp)
@@ -103,7 +126,7 @@ class StampEngine:
         tutwuri_file = BASE_DIR / "static" / "tka_assets" / "tutwuri.jpg"
 
         css_url = css_file.resolve().as_uri() if css_file.exists() else "/static/tka_assets/cetak.min.css"
-        tutwuri_url = tutwuri_file.resolve().as_uri() if tutwuri_file.exists() else "/static/tka_assets/tutwuri.jpg"
+        tutwuri_url = self._get_tutwuri_b64()
 
         ass = assignment or {}
         prof = signature_manager.get_school_profile()
@@ -114,7 +137,9 @@ class StampEngine:
         tgl_str = ass.get("tanggal") or slot_data.get("tgl_pelaksanaan") or "26 Oktober 2026"
         jam_str = ass.get("jam") or "07:00 - 08:45"
         server_code = ass.get("kd_server") or slot_data.get("kd_server") or "U05120005-AZ5U"
-        ruang_name = ass.get("nm_ruang") or slot_data.get("nm_ruang") or f"Lab {ass.get('lab_num', 1)}"
+        raw_ruang = ass.get("nm_ruang") or slot_data.get("nm_ruang") or f"Lab {ass.get('lab_num', 1)}"
+        lab_num_clean = extract_lab_number(raw_ruang) or ass.get("lab_num") or slot_data.get("lab_num")
+        ruang_name = f"Lab {lab_num_clean}" if (lab_num_clean and "lab" in str(raw_ruang).lower()) else str(raw_ruang)
 
         # Parse date parts
         day_names = {1: "Senin", 2: "Selasa", 3: "Rabu", 4: "Kamis", 5: "Jumat", 6: "Sabtu"}
@@ -165,8 +190,11 @@ class StampEngine:
         p_nip = proktor_off.get("nip") if proktor_off else "197804222024211001"
         pw_name = pengawas_off.get("name") if pengawas_off else (ass.get("pengawas_name") or "Wika Ayu Rohmah")
         pw_nip = pengawas_off.get("nip") if pengawas_off else "9134775676230133"
-        ks_name = kepsek_off.get("name") if kepsek_off else prof.get("nama_kepsek", "Li'ati, S.Pd., M.Mpd")
-        ks_nip = kepsek_off.get("nip") if kepsek_off else prof.get("nip_kepsek", "137011022007012010")
+        ks_name = (prof.get("nama_kepsek") or (kepsek_off.get("name") if kepsek_off else None)) or "Li'ati, S.Pd., M.Mpd"
+        raw_ks_nip = prof.get("nip_kepsek") or (kepsek_off.get("nip") if kepsek_off else "")
+        if not raw_ks_nip or raw_ks_nip == "137011022007012010":
+            raw_ks_nip = "197011022007012010"
+        ks_nip = raw_ks_nip
 
         # Prepare Signatures & Stamp
         p_sig_tag = ""
@@ -208,6 +236,13 @@ class StampEngine:
                 op = st_data["opacity"]
                 stamp_tag = f'<img src="{st_data["uri"]}" class="stamp-img" style="width:{w}px;height:{h}px;opacity:{op};transform:rotate({rot}deg);" alt="Cap">'
 
+        def clean_officer_nip(val) -> str:
+            if not val:
+                return "-"
+            s = str(val).strip()
+            s = re.sub(r'^(?:NIP\.?|NIP:?)\s*', '', s, flags=re.I).strip()
+            return s if s else "-"
+
         # Replacements
         replacements = {
             "{{ css_url }}": css_url,
@@ -219,7 +254,7 @@ class StampEngine:
             "{{ nama_sekolah }}": school_name,
             "{{ jam_mulai }}": jam_mulai,
             "{{ jam_selesai }}": jam_selesai,
-            "{{ username }}": prof.get("npsn", "U05120005"),
+            "{{ username }}": slot_data.get("username") or os.environ.get("TKA_USERNAME") or "U05120005",
             "{{ kd_server }}": server_code,
             "{{ nm_ruang }}": ruang_name,
             "{{ sesi }}": str(sesi_num),
@@ -228,14 +263,14 @@ class StampEngine:
             "{{ jm_tidak_mengerjakan }}": str(slot_data.get("jm_absen") or slot_data.get("jm_tidak_mengerjakan") or "0"),
             "{{ user_tidak_mengerjakan }}": "",
             "{{ catatan_tes }}": slot_data.get("catatan") or "Laancar",
-            "{{ proktor_nama }}": p_name,
-            "{{ proktor_nip }}": f"NIP. {p_nip}" if p_nip else "-",
+            "{{ proktor_nama }}": p_name or "-",
+            "{{ proktor_nip }}": clean_officer_nip(p_nip),
             "{{ proktor_sig_tag }}": p_sig_tag,
-            "{{ pengawas_nama }}": pw_name,
-            "{{ pengawas_nip }}": f"NIP. {pw_nip}" if pw_nip else "-",
+            "{{ pengawas_nama }}": pw_name or "-",
+            "{{ pengawas_nip }}": clean_officer_nip(pw_nip),
             "{{ pengawas_sig_tag }}": pw_sig_tag,
-            "{{ kepsek_nama }}": ks_name,
-            "{{ kepsek_nip }}": f"NIP. {ks_nip}" if ks_nip else "-",
+            "{{ kepsek_nama }}": ks_name or "-",
+            "{{ kepsek_nip }}": clean_officer_nip(ks_nip),
             "{{ kepsek_sig_tag }}": ks_sig_tag,
             "{{ stamp_sig_tag }}": stamp_tag
         }
@@ -262,7 +297,7 @@ class StampEngine:
         tutwuri_file = BASE_DIR / "static" / "tka_assets" / "tutwuri.jpg"
 
         css_url = css_file.resolve().as_uri() if css_file.exists() else "/static/tka_assets/cetak.min.css"
-        tutwuri_url = tutwuri_file.resolve().as_uri() if tutwuri_file.exists() else "/static/tka_assets/tutwuri.jpg"
+        tutwuri_url = self._get_tutwuri_b64()
 
         ass = assignment or {}
         prof = signature_manager.get_school_profile()
@@ -273,7 +308,9 @@ class StampEngine:
         tgl_str = ass.get("tanggal") or slot_data.get("tgl_pelaksanaan") or "26 Oktober 2026"
         jam_str = ass.get("jam") or "07:00 - 08:45"
         server_code = ass.get("kd_server") or slot_data.get("kd_server") or "U05120005-AZ5U"
-        ruang_name = ass.get("nm_ruang") or slot_data.get("nm_ruang") or f"Lab {ass.get('lab_num', 1)}"
+        raw_ruang = ass.get("nm_ruang") or slot_data.get("nm_ruang") or f"Lab {ass.get('lab_num', 1)}"
+        lab_num_clean = extract_lab_number(raw_ruang) or ass.get("lab_num") or slot_data.get("lab_num")
+        ruang_name = f"Lab {lab_num_clean}" if (lab_num_clean and "lab" in str(raw_ruang).lower()) else str(raw_ruang)
 
         day_names = {1: "Senin", 2: "Selasa", 3: "Rabu", 4: "Kamis", 5: "Jumat", 6: "Sabtu"}
         nama_hari = day_names.get(int(hari_num), "Senin")
@@ -437,7 +474,8 @@ class StampEngine:
 
     def render_jpg(self, doc_type: str, slot_data: dict, assignment: dict = None, output_path: Path = None) -> Path:
         """
-        Renders authentic official document as high-resolution JPEG (200 DPI A4) ready for TKA portal upload.
+        Renders authentic official document as high-resolution JPEG (150-200 DPI A4) ready for TKA portal upload.
+        Uses Edge/Chrome headless --print-to-pdf to generate authentic vector A4, then converts via pypdfium2.
         """
         doc_type = doc_type.upper()
         if not output_path:
@@ -447,14 +485,32 @@ class StampEngine:
             lab = assignment.get("lab_num", 1) if assignment else 1
             output_path = GENERATED_DOCS_DIR / f"{doc_type}_G{gel}_H{hari}_S{sesi}_Lab{lab}.jpg"
 
-        # Generate HTML
+        output_path.parent.mkdir(parents=True, exist_ok=True)
+
+        # 1. Generate clean vector A4 PDF first
+        pdf_path = self.render_pdf(doc_type, slot_data, assignment)
+
+        # 2. Convert PDF directly to crisp JPEG via pypdfium2
+        if pdf_path and pdf_path.exists():
+            try:
+                import pypdfium2 as pdfium
+                pdf = pdfium.PdfDocument(str(pdf_path))
+                page = pdf[0]
+                # Scale 2.0833 produces exact 150 DPI A4 (1240 x 1754 px), completely clean full-bleed
+                pil_img = page.render(scale=2.0833).to_pil()
+                pil_img.save(output_path, "JPEG", quality=95)
+                logger.info("Successfully converted vector PDF to clean A4 JPEG: %s (size: %s)", output_path, pil_img.size)
+                return output_path
+            except Exception as e:
+                logger.error("pypdfium2 PDF-to-JPEG conversion failed, falling back to browser screenshot: %s", e)
+
+        # Fallback to browser screenshot if PDF conversion fails
+        temp_html = GENERATED_DOCS_DIR / f"temp_{doc_type}_{os.getpid()}.html"
+        temp_png = GENERATED_DOCS_DIR / f"temp_{doc_type}_{os.getpid()}.png"
         if doc_type == "BAP":
             html_content = self.render_bap_html(slot_data, assignment, for_print=True)
         else:
             html_content = self.render_dh_html(slot_data, assignment, for_print=True)
-
-        temp_html = GENERATED_DOCS_DIR / f"temp_{doc_type}_{os.getpid()}.html"
-        temp_png = GENERATED_DOCS_DIR / f"temp_{doc_type}_{os.getpid()}.png"
         temp_html.write_text(html_content, encoding="utf-8")
 
         if self.browser_exe:
@@ -476,7 +532,7 @@ class StampEngine:
         if temp_png.exists():
             try:
                 img = Image.open(temp_png).convert("RGB")
-                img.save(output_path, "JPEG", quality=92, dpi=(200, 200))
+                img.save(output_path, "JPEG", quality=92, dpi=(150, 150))
                 temp_png.unlink()
             except Exception as e:
                 logger.error("Failed converting screenshot to JPEG: %s", e)

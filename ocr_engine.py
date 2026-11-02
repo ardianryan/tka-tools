@@ -383,7 +383,12 @@ class OCREngine:
 
             # 3. Ruang / Lab match (Weight 25)
             slot_ruang = slot.get("nm_ruang", "")
-            if target_lab and f"Lab {target_lab}" in slot_ruang:
+            try:
+                from signature_manager import extract_lab_number
+                slot_lab = extract_lab_number(slot_ruang)
+            except Exception:
+                slot_lab = None
+            if target_lab and (slot_lab == int(target_lab) or f"Lab {target_lab}" in slot_ruang):
                 score += 25
                 reasons.append(f"Lab {target_lab} cocok ({slot_ruang})")
 
