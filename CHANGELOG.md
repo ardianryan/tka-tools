@@ -6,6 +6,24 @@ Format berkas ini mengacu pada [Keep a Changelog](https://keepachangelog.com/id/
 
 ---
 
+## [1.1.0] - 2026-11-02
+
+### Ditambahkan (Added)
+- **Mesin Penempelan Tanda Tangan & Stempel Resmi Otomatis (*Digital Signature & School Stamp Overlay Engine*)**:
+  - **Master TTD Petugas dengan Smart Deduplication**: Cukup unggah berkas tanda tangan sekali per nama/NIP. Jika ada kesamaan nama atau NIP, sistem secara otomatis melewati (*skip*) dan langsung mengaitkan tanda tangan yang sudah tersimpan tanpa perlu mengunggah ulang.
+  - **Stempel Cap Basah Sekolah**: Mendukung unggah stempel sekolah (PNG transparan) dengan kontrol ukuran (*scale*), kepekatan tinta (*opacity*), dan sudut rotasi alami ($-2^\circ$ s/d $-5^\circ$) yang otomatis ditempelkan tumpang tindih (*overlap*) di atas tanda tangan Kepala Sekolah / Penanggung Jawab.
+  - **Pencetakan Langsung ke Printer (*Direct Print Ready*)**: Dokumen Berita Acara Pelaksanaan (BAP) dan Daftar Hadir (DH) langsung keluar dari printer fisik lengkap dengan tanda tangan proktor, pengawas sesi bersangkutan, kepala sekolah, dan cap stempel sekolah.
+  - **Render JPG Standar Portal & Auto-Upload**: Dokumen ber-TTD dan berstempel langsung dikonversi menjadi citra JPG beresolusi standar (200 DPI, $\le 1$ MB) dan dapat langsung diunggah otomatis ke portal TKA Kemendikdasmen tanpa perlu pemindaian ulang via ADF scanner.
+- **Tarik Data Dinamis Pengawas, Proktor, & Tanggal Pelaksanaan**:
+  - Mendukung penarikan data jadwal, tanggal pelaksanaan, dan nama petugas secara otomatis dari dashboard/slot portal TKA.
+  - Tabel antarmuka *Penugasan & Tanggal Dinamis* untuk penyesuaian fleksibel per sesi (mengganti nama pengawas, proktor, jam, atau tanggal jika ada perubahan jadwal dinas di lapangan).
+  - Fitur *Ubah Massal (Batch Update)* untuk menerapkan tanggal pelaksanaan atau nama pengawas ke seluruh sesi dalam satu hari/gelombang secara instan.
+- **Visualisasi Thumbnail Foto Berkas pada Matriks Jadwal Sesi Portal**:
+  - Kolom Berita Acara (BAP) dan Daftar Hadir (DH) pada tabel Matriks 96 Sesi Ujian kini tidak hanya menampilkan status teks `"Sudah"`, melainkan menampilkan **thumbnail foto fisik berkas nyata** yang telah diunggah.
+  - **Interactive Lightbox Modal**: Klik pada thumbnail foto langsung membuka penampil citra resolusi penuh dengan kontrol perbesar (*zoom in/out*), rotasi (90°, 180°, 270°), inspeksi detail waktu unggah/ukuran berkas, serta tombol unduh atau cetak ulang berkas.
+
+---
+
 ## [1.0.6] - 2026-11-02
 
 ### Diperbaiki (Fixed)

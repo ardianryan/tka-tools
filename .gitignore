@@ -34,6 +34,9 @@ settings.json
 .tka_session.json
 valid_session.json
 test_session_cookies.json
+signatures_data.json
+signatures/
+stamps/
 
 # Windows Shortcuts & OS Temp
 *.lnk

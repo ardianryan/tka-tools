@@ -7,6 +7,8 @@ import logging
 import random
 import time
 import threading
+import re
+from datetime import datetime
 from pathlib import Path
 from flask import Flask, render_template, request, jsonify, send_from_directory
 from flask_cors import CORS
@@ -21,6 +23,10 @@ from config import (
     DUPLICATES_DIR,
     UPLOAD_TEMP_DIR,
     LOG_CSV_PATH,
+    LOG_JSON_PATH,
+    SIGNATURES_DIR,
+    STAMPS_DIR,
+    GENERATED_DOCS_DIR,
     TKA_BASE_URL,
     TKA_USERNAME,
     TKA_PASSWORD,
@@ -39,6 +45,8 @@ from folder_watcher import FolderWatcher
 from upload_logger import record_upload, get_history
 from settings_manager import load_settings, save_settings
 from updater import update_checker, in_app_updater
+from signature_manager import signature_manager, normalize_name, normalize_nip
+from stamp_engine import stamp_engine
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(name)s: %(message)s")
 logger = logging.getLogger("SmartTKAServer")
@@ -219,6 +227,13 @@ def sync_portal_slots():
             cached_slots["bap"] = bap
             cached_slots["dh"] = dh
             cached_slots["last_sync"] = True
+            
+            # Sync dynamic session assignments & officers
+            try:
+                signature_manager.sync_from_portal_slots(bap, dh)
+            except Exception as se:
+                logger.debug("Failed to sync assignments from slots: %s", se)
+
             logger.info("Synced portal slots: %d BAP, %d DH", len(bap), len(dh))
             return True, f"Berhasil sinkronisasi {len(bap)} BAP & {len(dh)} Daftar Hadir."
         except Exception as e:
@@ -592,6 +607,421 @@ def api_portal_slots():
     doc_type = request.args.get("type", "bap").lower()
     slots = cached_slots["bap"] if doc_type == "bap" else cached_slots["dh"]
     return jsonify({"slots": slots})
+
+def get_slot_photo_index() -> dict:
+    """
+    Scans processed/ directory and logs/riwayat_unggah.jsonl to map each slot
+    (doc_type, hari, sesi, lab_num) to its actual uploaded file path, thumbnail preview,
+    file size, and upload timestamp.
+    """
+    index = {}
+    proc_dir = PROCESSED_DIR
+    if proc_dir.exists():
+        for p in proc_dir.glob("*.jpg"):
+            m = re.match(r'(BAP|DH)_H(\d+)_S(\d+)_Lab(\d+)_', p.name, re.I)
+            if m:
+                dtype, h, s, lab = m.group(1).upper(), int(m.group(2)), int(m.group(3)), int(m.group(4))
+                k = (dtype, h, s, lab)
+                if k not in index or p.stat().st_mtime > index[k]["mtime"]:
+                    index[k] = {
+                        "path": str(p.resolve()),
+                        "rel_path": f"processed/{p.name}",
+                        "name": p.name,
+                        "size_kb": round(p.stat().st_size / 1024, 1),
+                        "mtime": p.stat().st_mtime,
+                        "timestamp": datetime.fromtimestamp(p.stat().st_mtime).strftime("%Y-%m-%d %H:%M:%S")
+                    }
+
+    if LOG_JSON_PATH.exists():
+        try:
+            with open(LOG_JSON_PATH, "r", encoding="utf-8") as f:
+                for line in f:
+                    if not line.strip():
+                        continue
+                    try:
+                        rec = json.loads(line)
+                        dtype = (rec.get("doc_type") or "").upper()
+                        m_h = re.search(r'(\d+)', str(rec.get("hari", "")))
+                        m_s = re.search(r'(\d+)', str(rec.get("sesi", "")))
+                        m_lab = re.search(r'(\d+)', str(rec.get("ruang", "")))
+                        if dtype and m_h and m_s and m_lab:
+                            h = int(m_h.group(1))
+                            s = int(m_s.group(1))
+                            lab = int(m_lab.group(1))
+                            k = (dtype, h, s, lab)
+                            fp = rec.get("file_path")
+                            if fp and Path(fp).exists():
+                                p = Path(fp)
+                                rel = p.name
+                                try:
+                                    rel = str(p.relative_to(BASE_DIR)).replace("\\", "/")
+                                except Exception:
+                                    rel = str(p).replace("\\", "/")
+                                if k not in index or p.stat().st_mtime > index[k]["mtime"]:
+                                    index[k] = {
+                                        "path": str(p.resolve()),
+                                        "rel_path": rel,
+                                        "name": rec.get("file_name", p.name),
+                                        "size_kb": round(p.stat().st_size / 1024, 1),
+                                        "mtime": p.stat().st_mtime,
+                                        "timestamp": rec.get("timestamp") or datetime.fromtimestamp(p.stat().st_mtime).strftime("%Y-%m-%d %H:%M:%S")
+                                    }
+                    except Exception:
+                        pass
+        except Exception as e:
+            logger.debug("Failed parsing LOG_JSON_PATH: %s", e)
+
+    return index
+
+@app.route("/api/matrix/slots_with_photos")
+def api_matrix_slots_with_photos():
+    photo_index = get_slot_photo_index()
+    
+    bap_list = []
+    for s in cached_slots.get("bap", []):
+        slot_copy = dict(s)
+        h = int(s.get("hari") or 1)
+        ses = int(s.get("sesi") or 1)
+        m_lab = re.search(r'(\d+)', s.get("nm_ruang", ""))
+        lab = int(m_lab.group(1)) if m_lab else 1
+        
+        photo = photo_index.get(("BAP", h, ses, lab))
+        if photo:
+            slot_copy["photo"] = {
+                "url": f"/preview/{photo['rel_path']}",
+                "name": photo["name"],
+                "size_kb": photo["size_kb"],
+                "timestamp": photo.get("timestamp", "")
+            }
+        bap_list.append(slot_copy)
+        
+    dh_list = []
+    for s in cached_slots.get("dh", []):
+        slot_copy = dict(s)
+        h = int(s.get("hari") or 1)
+        ses = int(s.get("sesi") or 1)
+        m_lab = re.search(r'(\d+)', s.get("nm_ruang", ""))
+        lab = int(m_lab.group(1)) if m_lab else 1
+        
+        photo = photo_index.get(("DH", h, ses, lab))
+        if photo:
+            slot_copy["photo"] = {
+                "url": f"/preview/{photo['rel_path']}",
+                "name": photo["name"],
+                "size_kb": photo["size_kb"],
+                "timestamp": photo.get("timestamp", "")
+            }
+        dh_list.append(slot_copy)
+        
+    return jsonify({
+        "success": True,
+        "bap_slots": bap_list,
+        "dh_slots": dh_list
+    })
+
+# ==========================================
+# E-SIGNATURES & STAMP MASTER ENDPOINTS
+# ==========================================
+@app.route("/api/signatures")
+def api_signatures_get():
+    return jsonify({
+        "success": True,
+        "officers": signature_manager.list_officers(),
+        "stamp": signature_manager.get_stamp(),
+        "school_profile": signature_manager.get_school_profile()
+    })
+
+@app.route("/api/signatures/officer", methods=["POST"])
+def api_signatures_officer():
+    name = request.form.get("name") or (request.get_json(silent=True) or {}).get("name")
+    nip = request.form.get("nip") or (request.get_json(silent=True) or {}).get("nip") or ""
+    role = request.form.get("role") or (request.get_json(silent=True) or {}).get("role") or "PENGAWAS"
+    
+    if not name or not name.strip():
+        return jsonify({"success": False, "msg": "Nama petugas wajib diisi."}), 400
+        
+    image_bytes = None
+    if "signature_file" in request.files:
+        f = request.files["signature_file"]
+        if f and f.filename:
+            image_bytes = f.read()
+            
+    res = signature_manager.add_or_get_officer(name=name, nip=nip, role=role, image_bytes=image_bytes)
+    if not res:
+        return jsonify({"success": False, "msg": "Gagal menyimpan petugas."}), 400
+        
+    if res.get("was_skipped"):
+        return jsonify({
+            "success": True,
+            "was_skipped": True,
+            "officer": res,
+            "msg": f"Nama/NIP '{name}' sudah terdaftar: otomatis menggunakan tanda tangan yang tersimpan (di-skip)."
+        })
+    else:
+        return jsonify({
+            "success": True,
+            "was_skipped": False,
+            "officer": res,
+            "msg": f"Petugas '{name}' berhasil disimpan."
+        })
+
+@app.route("/api/signatures/delete_officer", methods=["POST"])
+def api_signatures_delete_officer():
+    data = request.get_json(silent=True) or {}
+    off_id = data.get("id")
+    if not off_id:
+        return jsonify({"success": False, "msg": "ID petugas tidak valid."}), 400
+    ok = signature_manager.delete_officer(off_id)
+    return jsonify({"success": ok, "msg": "Petugas berhasil dihapus." if ok else "Petugas tidak ditemukan."})
+
+@app.route("/api/signatures/stamp", methods=["POST"])
+def api_signatures_stamp():
+    image_bytes = None
+    if "stamp_file" in request.files:
+        f = request.files["stamp_file"]
+        if f and f.filename:
+            image_bytes = f.read()
+            
+    options = {}
+    for k in ["scale", "opacity", "rotation_deg", "offset_x", "offset_y"]:
+        val = request.form.get(k) or (request.get_json(silent=True) or {}).get(k)
+        if val is not None:
+            options[k] = val
+            
+    if image_bytes:
+        stamp = signature_manager.save_stamp(image_bytes, options)
+        return jsonify({"success": True, "stamp": stamp, "msg": "Berkas stempel sekolah berhasil diunggah."})
+    else:
+        stamp = signature_manager.update_stamp_options(options)
+        return jsonify({"success": True, "stamp": stamp, "msg": "Pengaturan stempel berhasil diperbarui."})
+
+@app.route("/api/signatures/school_profile", methods=["POST"])
+def api_signatures_school_profile():
+    data = request.get_json(silent=True) or request.form.to_dict() or {}
+    prof = signature_manager.update_school_profile(data)
+    return jsonify({"success": True, "school_profile": prof, "msg": "Profil sekolah berhasil disimpan."})
+
+# ==========================================
+# DYNAMIC ASSIGNMENTS ENDPOINTS
+# ==========================================
+@app.route("/api/assignments")
+def api_assignments_get():
+    assignments = signature_manager.get_all_assignments()
+    officers = {o["id"]: o for o in signature_manager.list_officers()}
+    stamp = signature_manager.get_stamp()
+    
+    enriched = []
+    for k, a in assignments.items():
+        ac = dict(a)
+        p_off = officers.get(a.get("proktor_id"))
+        pw_off = officers.get(a.get("pengawas_id"))
+        ks_off = officers.get(a.get("kepsek_id"))
+        
+        ac["proktor_name"] = p_off.get("name") if p_off else "-"
+        ac["proktor_has_sig"] = p_off.get("has_signature", False) if p_off else False
+        ac["pengawas_name"] = pw_off.get("name") if pw_off else "-"
+        ac["pengawas_has_sig"] = pw_off.get("has_signature", False) if pw_off else False
+        ac["kepsek_name"] = ks_off.get("name") if ks_off else signature_manager.get_school_profile().get("nama_kepsek", "-")
+        ac["kepsek_has_sig"] = ks_off.get("has_signature", False) if ks_off else False
+        ac["stamp_has_file"] = stamp.get("has_file", False)
+        enriched.append(ac)
+        
+    enriched.sort(key=lambda x: (x.get("gelombang", 1), x.get("hari", 1), x.get("sesi", 1), x.get("lab_num", 1)))
+    return jsonify({"success": True, "assignments": enriched})
+
+@app.route("/api/assignments/update", methods=["POST"])
+def api_assignments_update():
+    data = request.get_json(silent=True) or {}
+    gel = data.get("gelombang")
+    hari = data.get("hari")
+    sesi = data.get("sesi")
+    lab = data.get("lab_num")
+    if not (gel and hari and sesi and lab):
+        return jsonify({"success": False, "msg": "Parameter gelombang/hari/sesi/lab_num tidak lengkap."}), 400
+        
+    updates = {}
+    for k in ["tanggal", "jam", "proktor_id", "pengawas_id", "kepsek_id", "nm_ruang", "kd_server", "mapel"]:
+        if k in data:
+            updates[k] = data[k]
+            
+    res = signature_manager.update_assignment(gel, hari, sesi, lab, updates)
+    return jsonify({"success": True, "assignment": res, "msg": "Penugasan sesi berhasil diperbarui."})
+
+@app.route("/api/assignments/batch_update", methods=["POST"])
+def api_assignments_batch_update():
+    data = request.get_json(silent=True) or {}
+    filter_criteria = data.get("filter", {})
+    updates = data.get("updates", {})
+    if not updates:
+        return jsonify({"success": False, "msg": "Tidak ada data perubahan yang diberikan."}), 400
+        
+    count = signature_manager.batch_update_assignments(filter_criteria, updates)
+    return jsonify({"success": True, "count": count, "msg": f"Berhasil memperbarui {count} sesi sekaligus."})
+
+@app.route("/api/assignments/sync_portal", methods=["POST"])
+def api_assignments_sync_portal():
+    sync_portal_slots()
+    res = signature_manager.sync_from_portal_slots(cached_slots["bap"], cached_slots["dh"])
+    return jsonify({
+        "success": True,
+        "result": res,
+        "msg": f"Berhasil sinkronisasi penugasan: {res['total']} sesi dipetakan ({res['new_officers']} petugas baru)."
+    })
+
+# ==========================================
+# DIGITAL STAMPING & DIRECT UPLOAD/PRINT
+# ==========================================
+@app.route("/api/document/generate", methods=["POST"])
+def api_document_generate():
+    data = request.get_json(silent=True) or {}
+    doc_type = (data.get("doc_type") or "BAP").upper()
+    gel = int(data.get("gelombang") or 1)
+    hari = int(data.get("hari") or 1)
+    sesi = int(data.get("sesi") or 1)
+    lab = int(data.get("lab_num") or 1)
+    
+    ass = signature_manager.get_assignment(gel, hari, sesi, lab) or {
+        "gelombang": gel, "hari": hari, "sesi": sesi, "lab_num": lab
+    }
+    
+    slots = cached_slots["bap"] if doc_type == "BAP" else cached_slots["dh"]
+    slot_match = next((s for s in slots if str(s.get("hari")) == str(hari) and str(s.get("sesi")) == str(sesi)), {})
+    
+    try:
+        if doc_type == "BAP":
+            img, file_path = stamp_engine.stamp_bap(slot_match, ass)
+        else:
+            img, file_path = stamp_engine.stamp_dh(slot_match, ass)
+            
+        p = Path(file_path)
+        rel_url = f"/preview/DokumenTKA/generated/{p.name}"
+        
+        if data.get("add_to_queue", True):
+            q_item = {
+                "id": f"gen_{int(time.time()*1000)}",
+                "file_path": str(p.resolve()),
+                "file_name": p.name,
+                "doc_type": doc_type,
+                "doc_type_label": "Berita Acara (BAP)" if doc_type == "BAP" else "Daftar Hadir (DH)",
+                "hari": hari,
+                "sesi": sesi,
+                "lab_num": lab,
+                "ruang": ass.get("nm_ruang", f"Lab {lab}"),
+                "kd_server": ass.get("kd_server", slot_match.get("kd_server", "-")),
+                "mapel": ass.get("mapel", slot_match.get("keterangan", "-")),
+                "matched_slot": slot_match or {
+                    "gelombang": gel, "hari": hari, "sesi": sesi, "nm_ruang": ass.get("nm_ruang", f"Lab {lab}")
+                },
+                "match_score": 100,
+                "match_reason": "Dihasilkan secara digital lengkap dengan TTD & Stempel resmi",
+                "status": "READY",
+                "upload_msg": "",
+                "created_at": time.time()
+            }
+            for existing in list(queue):
+                if existing.get("file_name") == p.name:
+                    queue.remove(existing)
+            queue.append(q_item)
+            
+        return jsonify({
+            "success": True,
+            "file_path": str(p.resolve()),
+            "preview_url": rel_url,
+            "filename": p.name,
+            "msg": f"Dokumen {doc_type} berhasil ditempeli TTD & Stempel resmi!"
+        })
+    except Exception as e:
+        logger.error("Error generating stamped document: %s", e)
+        return jsonify({"success": False, "msg": str(e)}), 500
+
+@app.route("/api/document/direct_upload", methods=["POST"])
+def api_document_direct_upload():
+    data = request.get_json(silent=True) or {}
+    doc_type = (data.get("doc_type") or "BAP").upper()
+    gel = int(data.get("gelombang") or 1)
+    hari = int(data.get("hari") or 1)
+    sesi = int(data.get("sesi") or 1)
+    lab = int(data.get("lab_num") or 1)
+    
+    ass = signature_manager.get_assignment(gel, hari, sesi, lab) or {
+        "gelombang": gel, "hari": hari, "sesi": sesi, "lab_num": lab
+    }
+    slots = cached_slots["bap"] if doc_type == "BAP" else cached_slots["dh"]
+    slot_match = next((s for s in slots if str(s.get("hari")) == str(hari) and str(s.get("sesi")) == str(sesi)), None)
+    if not slot_match:
+        return jsonify({"success": False, "msg": "Jadwal slot pada portal TKA tidak ditemukan untuk sesi ini."}), 400
+        
+    try:
+        if doc_type == "BAP":
+            img, file_path = stamp_engine.stamp_bap(slot_match, ass)
+            res = tka_client.upload_pelaksanaan(slot_match, file_path)
+        else:
+            img, file_path = stamp_engine.stamp_dh(slot_match, ass)
+            res = tka_client.upload_absen(slot_match, file_path)
+            
+        if res.get("success"):
+            record_upload({
+                "doc_type": doc_type,
+                "hari": hari,
+                "sesi": sesi,
+                "lab_num": lab,
+                "ruang": ass.get("nm_ruang", f"Lab {lab}"),
+                "kd_server": slot_match.get("kd_server", "-"),
+                "mapel": slot_match.get("keterangan", "-"),
+                "file_name": Path(file_path).name,
+                "file_path": file_path,
+                "matched_slot": slot_match
+            }, status="SUKSES", portal_msg=res.get("msg", "Berhasil diunggah ke portal TKA"))
+            
+            sync_portal_slots()
+            return jsonify({"success": True, "msg": f"Dokumen {doc_type} berhasil diunggah langsung ke portal TKA!"})
+        else:
+            return jsonify({"success": False, "msg": res.get("msg", "Gagal unggah ke server portal TKA.")}), 400
+    except Exception as e:
+        logger.error("Direct upload failed: %s", e)
+        return jsonify({"success": False, "msg": str(e)}), 500
+
+@app.route("/document/print/<doc_type>/<int:gelombang>/<int:hari>/<int:sesi>/<int:lab_num>")
+def document_print_view(doc_type, gelombang, hari, sesi, lab_num):
+    doc_type = doc_type.upper()
+    ass = signature_manager.get_assignment(gelombang, hari, sesi, lab_num) or {
+        "gelombang": gelombang, "hari": hari, "sesi": sesi, "lab_num": lab_num
+    }
+    slots = cached_slots["bap"] if doc_type == "BAP" else cached_slots["dh"]
+    slot_match = next((s for s in slots if str(s.get("hari")) == str(hari) and str(s.get("sesi")) == str(sesi)), {})
+    
+    try:
+        if doc_type == "BAP":
+            img, file_path = stamp_engine.stamp_bap(slot_match, ass)
+        else:
+            img, file_path = stamp_engine.stamp_dh(slot_match, ass)
+            
+        fn = Path(file_path).name
+        img_url = f"/preview/DokumenTKA/generated/{fn}"
+        return f"""<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8">
+    <title>Cetak {doc_type} - Hari {hari} Sesi {sesi} Lab {lab_num}</title>
+    <style>
+        @page {{ size: A4 portrait; margin: 0; }}
+        html, body {{ margin: 0; padding: 0; width: 100%; height: 100%; background: #fff; }}
+        .print-container {{ width: 100%; display: flex; justify-content: center; }}
+        img {{ width: 100%; max-width: 210mm; height: auto; display: block; }}
+        @media print {{
+            body {{ -webkit-print-color-adjust: exact; print-color-adjust: exact; }}
+            img {{ width: 100%; max-width: 100%; height: auto; page-break-inside: avoid; }}
+        }}
+    </style>
+</head>
+<body onload="setTimeout(function(){{ window.print(); }}, 400);">
+    <div class="print-container">
+        <img src="{img_url}" alt="Dokumen {doc_type}">
+    </div>
+</body>
+</html>"""
+    except Exception as e:
+        return f"<h3>Gagal menyiapkan cetak: {str(e)}</h3>", 500
 
 @app.route("/api/scan", methods=["POST"])
 def api_scan():

@@ -32,6 +32,8 @@ hidden_imports = [
     'pytesseract',
     'packaging',
     'packaging.version',
+    'signature_manager',
+    'stamp_engine',
 ]
 
 if sys.platform.startswith('win'):

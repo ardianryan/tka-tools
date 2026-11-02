@@ -443,6 +443,103 @@
                 margin-left: 0;
             }
         }
+    
+        /* Thumbnail & Photo Cards on Matrix */
+        .slot-photo-card {
+            position: relative;
+            display: inline-flex;
+            flex-direction: column;
+            align-items: center;
+            cursor: pointer;
+            background: #ffffff;
+            border: 1px solid #cbd5e1;
+            border-radius: 6px;
+            padding: 3px;
+            transition: all 0.2s ease;
+            max-width: 74px;
+        }
+        .slot-photo-card:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+            border-color: #2563eb;
+        }
+        .slot-thumb {
+            width: 58px;
+            height: 72px;
+            object-fit: cover;
+            border-radius: 4px;
+            border: 1px solid #e2e8f0;
+            background: #f8fafc;
+        }
+        .slot-thumb-overlay {
+            position: absolute;
+            top: 3px;
+            left: 3px;
+            right: 3px;
+            height: 72px;
+            background: rgba(15, 23, 42, 0.45);
+            border-radius: 4px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: #ffffff;
+            opacity: 0;
+            transition: opacity 0.2s ease;
+            font-size: 0.9rem;
+        }
+        .slot-photo-card:hover .slot-thumb-overlay {
+            opacity: 1;
+        }
+        .slot-thumb-status {
+            font-size: 0.65rem;
+            font-weight: 600;
+            color: #15803d;
+            margin-top: 2px;
+            white-space: nowrap;
+        }
+
+        /* E-Signature & Stamp Cards */
+        .sig-officer-card {
+            background: #ffffff;
+            border: 1px solid #e2e8f0;
+            border-radius: 8px;
+            padding: 12px;
+            transition: all 0.2s ease;
+        }
+        .sig-officer-card:hover {
+            border-color: #3b82f6;
+            box-shadow: 0 4px 12px rgba(59, 130, 246, 0.08);
+        }
+        .sig-preview-box {
+            width: 100%;
+            height: 80px;
+            background: #f8fafc;
+            border: 1px dashed #cbd5e1;
+            border-radius: 6px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            overflow: hidden;
+            margin-bottom: 8px;
+        }
+        .sig-preview-img {
+            max-width: 90%;
+            max-height: 70px;
+            object-fit: contain;
+        }
+        .stamp-live-preview {
+            width: 140px;
+            height: 140px;
+            background: #ffffff;
+            border: 2px dashed #94a3b8;
+            border-radius: 8px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            overflow: hidden;
+            margin: 0 auto;
+        }
+
     </style>
 </head>
 <body>
@@ -478,6 +575,18 @@
                 <i class="fa-solid fa-table-cells" style="width: 18px;"></i>
                 <span class="flex-grow-1">Jadwal Sesi Portal</span>
                 <span class="font-mono small text-secondary">96</span>
+            </a>
+
+            <a class="nav-sidebar-link" onclick="switchNav('assignments')">
+                <i class="fa-solid fa-user-pen" style="width: 18px;"></i>
+                <span class="flex-grow-1">Penugasan Dinamis</span>
+                <span class="badge bg-primary-subtle text-primary border border-primary-subtle" style="font-size: 0.65rem;">v1.1</span>
+            </a>
+
+            <a class="nav-sidebar-link" onclick="switchNav('signatures')">
+                <i class="fa-solid fa-signature" style="width: 18px;"></i>
+                <span class="flex-grow-1">TTD & Stempel</span>
+                <span class="badge bg-success-subtle text-success border border-success-subtle" style="font-size: 0.65rem;">Baru</span>
             </a>
 
             <a class="nav-sidebar-link" onclick="switchNav('history')">
@@ -838,6 +947,151 @@
                     </div>
                 </div>
             </section>
+
+            <!-- VIEW 5: PENUGASAN & JADWAL DINAMIS -->
+            <section id="view-assignments" class="content-view" style="display: none;">
+                <div class="admin-card p-4">
+                    <div class="d-flex flex-wrap justify-content-between align-items-center mb-3 gap-2">
+                        <div>
+                            <h6 class="fw-bold mb-1"><i class="fa-solid fa-user-pen text-primary me-2"></i>Jadwal Penugasan & Tanggal Dinamis (v1.1)</h6>
+                            <p class="text-secondary small mb-0">Atur tanggal pelaksanaan, nama pengawas, proktor per sesi secara dinamis sebelum dicetak atau diunggah.</p>
+                        </div>
+                        <div class="d-flex align-items-center gap-2">
+                            <input type="text" id="filterAssignments" class="form-control form-control-sm font-mono" placeholder="Cari Hari/Sesi/Lab/Pengawas..." onkeyup="filterAssignmentsTable()" style="width: 220px;">
+                            <button class="btn btn-sm btn-outline-primary" onclick="syncAssignmentsFromPortal()">
+                                <i class="fa-solid fa-cloud-arrow-down me-1"></i> Tarik dari Portal
+                            </button>
+                            <button class="btn btn-sm btn-outline-secondary" onclick="openBatchAssignmentModal()">
+                                <i class="fa-solid fa-layer-group me-1"></i> Ubah Massal
+                            </button>
+                        </div>
+                    </div>
+
+                    <div class="table-responsive" style="max-height: 580px; overflow-y: auto;">
+                        <table class="table table-admin table-bordered mb-0" id="assignmentsTable">
+                            <thead class="sticky-top">
+                                <tr>
+                                    <th class="text-center" style="width: 45px;">Gel</th>
+                                    <th style="width: 70px;">Hari</th>
+                                    <th style="width: 140px;">Tanggal Pelaksanaan</th>
+                                    <th style="width: 70px;">Sesi</th>
+                                    <th>Ruang / Lab</th>
+                                    <th>Pengawas Ruang</th>
+                                    <th>Proktor</th>
+                                    <th class="text-center" style="width: 90px;">Status TTD</th>
+                                    <th class="text-center" style="width: 220px;">Aksi Cepat</th>
+                                </tr>
+                            </thead>
+                            <tbody id="assignmentsTableBody">
+                                <tr>
+                                    <td colspan="9" class="text-center py-4 text-muted">Memuat jadwal penugasan...</td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </section>
+
+            <!-- VIEW 6: MASTER TANDA TANGAN & STEMPEL RESMI -->
+            <section id="view-signatures" class="content-view" style="display: none;">
+                <div class="row g-4">
+                    <!-- Kolom Kiri: Profil Sekolah & Stempel Resmi -->
+                    <div class="col-lg-5">
+                        <div class="admin-card p-4 mb-4">
+                            <h6 class="fw-bold mb-3"><i class="fa-solid fa-stamp text-primary me-2"></i>Stempel Resmi & Profil Sekolah</h6>
+                            <form id="formSchoolProfile" onsubmit="saveSchoolProfile(event)">
+                                <div class="mb-2">
+                                    <label class="form-label small fw-semibold mb-1">Nama Sekolah / Madrasah</label>
+                                    <input type="text" class="form-control form-control-sm" id="cfgNamaSekolah" placeholder="SMAN 1 GEDEG" required>
+                                </div>
+                                <div class="row g-2 mb-2">
+                                    <div class="col-6">
+                                        <label class="form-label small fw-semibold mb-1">NPSN</label>
+                                        <input type="text" class="form-control form-control-sm font-mono" id="cfgNpsn" placeholder="20502721">
+                                    </div>
+                                    <div class="col-6">
+                                        <label class="form-label small fw-semibold mb-1">NIP Kepala Sekolah</label>
+                                        <input type="text" class="form-control form-control-sm font-mono" id="cfgNipKepsek" placeholder="137011022007012010">
+                                    </div>
+                                </div>
+                                <div class="mb-3">
+                                    <label class="form-label small fw-semibold mb-1">Nama Kepala Sekolah / Penanggung Jawab</label>
+                                    <input type="text" class="form-control form-control-sm" id="cfgNamaKepsek" placeholder="Li'ati, S.Pd., M.Mpd" required>
+                                </div>
+                                <button type="submit" class="btn btn-primary btn-sm w-100">
+                                    <i class="fa-solid fa-floppy-disk me-1"></i> Simpan Profil Sekolah
+                                </button>
+                            </form>
+                        </div>
+
+                        <!-- Card Stempel Sekolah -->
+                        <div class="admin-card p-4">
+                            <div class="d-flex justify-content-between align-items-center mb-3">
+                                <h6 class="fw-bold mb-0">Stempel Cap Basah Sekolah</h6>
+                                <span class="badge bg-light text-secondary border font-mono small" id="badgeStampStatus">Belum Ada</span>
+                            </div>
+                            
+                            <div class="text-center mb-3">
+                                <div class="stamp-live-preview shadow-sm" id="stampPreviewContainer">
+                                    <img id="stampPreviewImg" src="" alt="Stempel" style="display: none; max-width: 90%; max-height: 90%; object-fit: contain;">
+                                    <span id="stampPreviewPlaceholder" class="text-muted small">Belum ada stempel</span>
+                                </div>
+                            </div>
+
+                            <form id="formStampUpload" onsubmit="saveStampUpload(event)">
+                                <div class="mb-3">
+                                    <label class="form-label small fw-semibold mb-1">Unggah Citra Stempel (PNG Transparan)</label>
+                                    <input type="file" class="form-control form-control-sm" id="stampFileInput" accept="image/png,image/jpeg">
+                                </div>
+                                <div class="row g-2 mb-2">
+                                    <div class="col-6">
+                                        <label class="form-label small mb-1">Ukuran: <span id="valStampScale">1.0</span>x</label>
+                                        <input type="range" class="form-range" id="stampScale" min="0.5" max="1.5" step="0.05" value="1.0" oninput="updateStampPreviewStyle()">
+                                    </div>
+                                    <div class="col-6">
+                                        <label class="form-label small mb-1">Kepekatan: <span id="valStampOpacity">88</span>%</label>
+                                        <input type="range" class="form-range" id="stampOpacity" min="0.4" max="1.0" step="0.02" value="0.88" oninput="updateStampPreviewStyle()">
+                                    </div>
+                                </div>
+                                <div class="mb-3">
+                                    <label class="form-label small mb-1">Rotasi Alami: <span id="valStampRotation">-3.5</span>°</label>
+                                    <input type="range" class="form-range" id="stampRotation" min="-15" max="15" step="0.5" value="-3.5" oninput="updateStampPreviewStyle()">
+                                </div>
+                                <button type="submit" class="btn btn-outline-primary btn-sm w-100">
+                                    <i class="fa-solid fa-cloud-arrow-up me-1"></i> Simpan Pengaturan Stempel
+                                </button>
+                            </form>
+                        </div>
+                    </div>
+
+                    <!-- Kolom Kanan: Master Tanda Tangan Petugas (Anti-Duplikasi Cerdas) -->
+                    <div class="col-lg-7">
+                        <div class="admin-card p-4">
+                            <div class="d-flex flex-wrap justify-content-between align-items-center mb-3 gap-2">
+                                <div>
+                                    <h6 class="fw-bold mb-1"><i class="fa-solid fa-file-signature text-success me-2"></i>Master Tanda Tangan Petugas</h6>
+                                    <p class="text-secondary small mb-0">Tanda tangan cukup diunggah sekali per nama/NIP. Jika ada kesamaan nama/NIP, sistem otomatis menggunakan TTD yang sudah tersimpan (di-skip).</p>
+                                </div>
+                                <button class="btn btn-sm btn-success" onclick="openAddOfficerModal()">
+                                    <i class="fa-solid fa-plus me-1"></i> Tambah / Unggah TTD
+                                </button>
+                            </div>
+
+                            <!-- Alert Smart Deduplication -->
+                            <div class="alert alert-info py-2 px-3 small border-0 d-flex align-items-center gap-2 mb-3">
+                                <i class="fa-solid fa-shield-halved text-info fs-5"></i>
+                                <div><strong>Smart Deduplication Aktif:</strong> Petugas dengan Nama atau NIP yang sama tidak perlu diunggah ulang. TTD akan otomatis dipakai di semua sesi penugasannya.</div>
+                            </div>
+
+                            <!-- List Petugas -->
+                            <div class="row g-3" id="officersListContainer">
+                                <div class="col-12 text-center py-4 text-muted">Memuat daftar petugas...</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
 
         </main>
 
@@ -1278,7 +1532,592 @@
 </div>
 
 <!-- Scripts -->
-<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js">
+    // ==========================================
+    // VERSI 1.1: TTD, STEMPEL, & FOTO THUMBNAIL
+    // ==========================================
+    let allOfficersList = [];
+    let currentStampInfo = {};
+    let allAssignmentsList = [];
+    let currentLightboxZoom = 1.0;
+    let currentLightboxRotation = 0;
+
+    // Enhanced switchNav with v1.1 views
+    const originalSwitchNav = switchNav;
+    switchNav = function(viewId) {
+        document.querySelectorAll(".nav-sidebar-link").forEach(el => el.classList.remove("active"));
+        document.querySelectorAll(".content-view").forEach(el => el.style.display = "none");
+
+        const targetView = document.getElementById(`view-${viewId}`);
+        if (targetView) targetView.style.display = "block";
+
+        const titleMap = {
+            'queue': 'Antrean Berkas',
+            'matrix': 'Jadwal Sesi Portal (96 Sesi)',
+            'assignments': 'Penugasan & Tanggal Dinamis (v1.1)',
+            'signatures': 'Master Tanda Tangan & Stempel Resmi (v1.1)',
+            'history': 'Riwayat Unggah',
+            'upload': 'Impor Manual'
+        };
+        document.getElementById("currentViewTitle").innerText = titleMap[viewId] || 'Dashboard';
+
+        if (viewId === 'assignments') loadAssignments();
+        if (viewId === 'signatures') loadSignatures();
+        if (viewId === 'matrix') loadSlots();
+        if (viewId === 'history') loadHistory();
+
+        const clickedLink = event ? event.currentTarget : null;
+        if (clickedLink) clickedLink.classList.add("active");
+    };
+
+    // Load Slots with real photo thumbnails
+    async function loadSlots() {
+        try {
+            const res = await fetch("/api/matrix/slots_with_photos");
+            const data = await res.json();
+            allBapSlots = data.bap_slots || [];
+            allDhSlots = data.dh_slots || [];
+            renderMatrixTable();
+        } catch (err) {
+            console.error("Slots load error:", err);
+        }
+    }
+
+    // Render Matrix with Interactive Photo Thumbnails
+    function renderMatrixTable() {
+        const tbody = document.getElementById("matrixTableBody");
+        if (allBapSlots.length === 0) {
+            tbody.innerHTML = `<tr><td colspan="8" class="text-center py-4 text-muted">Belum ada data dari portal TKA.</td></tr>`;
+            return;
+        }
+
+        let html = "";
+        allBapSlots.forEach((bap, idx) => {
+            const dh = allDhSlots[idx] || {};
+            const bapDone = Boolean(bap.filename || (bap.status && bap.status.includes("check")));
+            const dhDone = Boolean(dh.filename_1 || (dh.status && dh.status.includes("check")));
+
+            let bapBadge = `<span class="text-muted font-mono small">- Belum</span>`;
+            if (bap.photo) {
+                bapBadge = `
+                    <div class="slot-photo-card" onclick="openPhotoLightbox('Berita Acara (BAP)', '${bap.photo.url}', 'Hari ${bap.hari} Sesi ${bap.sesi} - ${bap.nm_ruang}', '${bap.photo.name}', '${bap.photo.timestamp}', '${bap.photo.size_kb} KB')">
+                        <img src="${bap.photo.url}" class="slot-thumb" alt="BAP" loading="lazy">
+                        <div class="slot-thumb-overlay"><i class="fa-solid fa-magnifying-glass-plus"></i></div>
+                        <div class="slot-thumb-status"><i class="fa-solid fa-circle-check text-success"></i> Terunggah</div>
+                    </div>`;
+            } else if (bapDone) {
+                bapBadge = `<span class="badge bg-success-subtle text-success border border-success-subtle font-mono small"><i class="fa-solid fa-cloud-check me-1"></i>Sudah</span>`;
+            }
+
+            let dhBadge = `<span class="text-muted font-mono small">- Belum</span>`;
+            if (dh.photo) {
+                dhBadge = `
+                    <div class="slot-photo-card" onclick="openPhotoLightbox('Daftar Hadir (DH)', '${dh.photo.url}', 'Hari ${bap.hari} Sesi ${bap.sesi} - ${bap.nm_ruang}', '${dh.photo.name}', '${dh.photo.timestamp}', '${dh.photo.size_kb} KB')">
+                        <img src="${dh.photo.url}" class="slot-thumb" alt="DH" loading="lazy">
+                        <div class="slot-thumb-overlay"><i class="fa-solid fa-magnifying-glass-plus"></i></div>
+                        <div class="slot-thumb-status"><i class="fa-solid fa-circle-check text-success"></i> Terunggah</div>
+                    </div>`;
+            } else if (dhDone) {
+                dhBadge = `<span class="badge bg-success-subtle text-success border border-success-subtle font-mono small"><i class="fa-solid fa-cloud-check me-1"></i>Sudah</span>`;
+            }
+
+            html += `
+                <tr>
+                    <td class="text-center font-mono">${bap.gelombang || '1'}</td>
+                    <td class="font-mono">Hari ${bap.hari}</td>
+                    <td class="font-mono">Sesi ${bap.sesi}</td>
+                    <td class="fw-semibold">${bap.nm_ruang}</td>
+                    <td>${bap.keterangan || dh.mp || '-'}</td>
+                    <td><small class="text-muted font-mono">${bap.kd_server}</small></td>
+                    <td class="text-center p-2">${bapBadge}</td>
+                    <td class="text-center p-2">${dhBadge}</td>
+                </tr>`;
+        });
+        tbody.innerHTML = html;
+    }
+
+    // Lightbox Controls
+    function openPhotoLightbox(docType, url, title, filename, timestamp, size) {
+        document.getElementById("lightboxDocType").innerText = docType;
+        document.getElementById("lightboxTitle").innerText = title;
+        document.getElementById("lightboxFilename").innerText = filename;
+        document.getElementById("lightboxTimestamp").innerText = timestamp || "Waktu tidak tercatat";
+        document.getElementById("lightboxFilesize").innerText = size || "";
+        
+        const img = document.getElementById("lightboxImage");
+        img.src = url;
+        currentLightboxZoom = 1.0;
+        currentLightboxRotation = 0;
+        img.style.transform = `scale(1) rotate(0deg)`;
+        
+        const dlBtn = document.getElementById("lightboxDownloadBtn");
+        dlBtn.href = url;
+        dlBtn.download = filename;
+
+        new bootstrap.Modal(document.getElementById("photoLightboxModal")).show();
+    }
+
+    function rotateLightbox(deg) {
+        currentLightboxRotation = (currentLightboxRotation + deg) % 360;
+        const img = document.getElementById("lightboxImage");
+        img.style.transform = `scale(${currentLightboxZoom}) rotate(${currentLightboxRotation}deg)`;
+    }
+
+    function zoomLightbox(delta) {
+        currentLightboxZoom = Math.max(0.4, Math.min(3.0, currentLightboxZoom + delta));
+        const img = document.getElementById("lightboxImage");
+        img.style.transform = `scale(${currentLightboxZoom}) rotate(${currentLightboxRotation}deg)`;
+    }
+
+    function resetLightboxZoom() {
+        currentLightboxZoom = 1.0;
+        currentLightboxRotation = 0;
+        const img = document.getElementById("lightboxImage");
+        img.style.transform = `scale(1) rotate(0deg)`;
+    }
+
+    // ==========================================
+    // SIGNATURES & STAMP MANAGEMENT
+    // ==========================================
+    async function loadSignatures() {
+        try {
+            const res = await fetch("/api/signatures");
+            const data = await res.json();
+            if (!data.success) return;
+
+            allOfficersList = data.officers || [];
+            currentStampInfo = data.stamp || {};
+            const prof = data.school_profile || {};
+
+            // Populate School Profile Form
+            document.getElementById("cfgNamaSekolah").value = prof.nama_sekolah || "";
+            document.getElementById("cfgNpsn").value = prof.npsn || "";
+            document.getElementById("cfgNamaKepsek").value = prof.nama_kepsek || "";
+            document.getElementById("cfgNipKepsek").value = prof.nip_kepsek || "";
+
+            // Populate Stamp Preview & Sliders
+            const badgeStamp = document.getElementById("badgeStampStatus");
+            const stampImg = document.getElementById("stampPreviewImg");
+            const stampPh = document.getElementById("stampPreviewPlaceholder");
+
+            if (currentStampInfo.has_file && currentStampInfo.file_name) {
+                badgeStamp.className = "badge bg-success-subtle text-success border border-success-subtle font-mono small";
+                badgeStamp.innerText = "Stempel Aktif";
+                stampImg.src = `/preview/signatures/${currentStampInfo.file_name}?t=${Date.now()}`;
+                stampImg.style.display = "block";
+                stampPh.style.display = "none";
+            } else {
+                badgeStamp.className = "badge bg-light text-secondary border font-mono small";
+                badgeStamp.innerText = "Belum Ada";
+                stampImg.style.display = "none";
+                stampPh.style.display = "block";
+            }
+
+            document.getElementById("stampScale").value = currentStampInfo.scale || 1.0;
+            document.getElementById("stampOpacity").value = currentStampInfo.opacity || 0.88;
+            document.getElementById("stampRotation").value = currentStampInfo.rotation_deg || -3.5;
+            updateStampPreviewStyle();
+
+            // Render Officers List
+            renderOfficersCards();
+        } catch (err) {
+            console.error("Failed loading signatures:", err);
+        }
+    }
+
+    function updateStampPreviewStyle() {
+        const scale = document.getElementById("stampScale").value;
+        const opacity = document.getElementById("stampOpacity").value;
+        const rot = document.getElementById("stampRotation").value;
+
+        document.getElementById("valStampScale").innerText = scale;
+        document.getElementById("valStampOpacity").innerText = Math.round(opacity * 100);
+        document.getElementById("valStampRotation").innerText = rot;
+
+        const img = document.getElementById("stampPreviewImg");
+        if (img) {
+            img.style.transform = `scale(${scale}) rotate(${rot}deg)`;
+            img.style.opacity = opacity;
+        }
+    }
+
+    async function saveSchoolProfile(e) {
+        e.preventDefault();
+        const payload = {
+            nama_sekolah: document.getElementById("cfgNamaSekolah").value,
+            npsn: document.getElementById("cfgNpsn").value,
+            nama_kepsek: document.getElementById("cfgNamaKepsek").value,
+            nip_kepsek: document.getElementById("cfgNipKepsek").value
+        };
+        try {
+            const res = await fetch("/api/signatures/school_profile", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify(payload)
+            });
+            const d = await res.json();
+            alert(d.msg || "Profil sekolah berhasil disimpan!");
+            loadSignatures();
+        } catch (err) {
+            alert("Gagal menyimpan profil: " + err);
+        }
+    }
+
+    async function saveStampUpload(e) {
+        e.preventDefault();
+        const fileInput = document.getElementById("stampFileInput");
+        const formData = new FormData();
+        if (fileInput.files.length > 0) {
+            formData.append("stamp_file", fileInput.files[0]);
+        }
+        formData.append("scale", document.getElementById("stampScale").value);
+        formData.append("opacity", document.getElementById("stampOpacity").value);
+        formData.append("rotation_deg", document.getElementById("stampRotation").value);
+
+        try {
+            const res = await fetch("/api/signatures/stamp", {
+                method: "POST",
+                body: formData
+            });
+            const d = await res.json();
+            alert(d.msg || "Pengaturan stempel berhasil disimpan!");
+            fileInput.value = "";
+            loadSignatures();
+        } catch (err) {
+            alert("Gagal menyimpan stempel: " + err);
+        }
+    }
+
+    function renderOfficersCards() {
+        const container = document.getElementById("officersListContainer");
+        if (allOfficersList.length === 0) {
+            container.innerHTML = `<div class="col-12 text-center py-4 text-muted">Belum ada data petugas. Klik tombol "Tambah / Unggah TTD".</div>`;
+            return;
+        }
+
+        let html = "";
+        allOfficersList.forEach(off => {
+            const roleLabels = {
+                'PROKTOR': '<span class="badge bg-primary-subtle text-primary border border-primary-subtle">Proktor</span>',
+                'PENGAWAS': '<span class="badge bg-warning-subtle text-warning-emphasis border border-warning-subtle">Pengawas</span>',
+                'KEPALA_SEKOLAH': '<span class="badge bg-danger-subtle text-danger border border-danger-subtle">Kepala Sekolah</span>'
+            };
+            const roleBadge = roleLabels[off.role] || `<span class="badge bg-secondary">${off.role}</span>`;
+            
+            const sigContent = off.has_signature && off.signature_filename
+                ? `<img src="/preview/signatures/${off.signature_filename}?t=${Date.now()}" class="sig-preview-img" alt="TTD">`
+                : `<span class="text-danger small"><i class="fa-solid fa-triangle-exclamation me-1"></i>Belum Ada TTD</span>`;
+
+            html += `
+                <div class="col-md-6">
+                    <div class="sig-officer-card shadow-sm h-100 d-flex flex-column justify-content-between">
+                        <div>
+                            <div class="d-flex justify-content-between align-items-center mb-2">
+                                ${roleBadge}
+                                <button class="btn btn-link text-danger p-0 border-0" onclick="deleteOfficer('${off.id}', '${off.name}')" title="Hapus Petugas">
+                                    <i class="fa-solid fa-trash-can"></i>
+                                </button>
+                            </div>
+                            <div class="fw-bold text-dark text-truncate" title="${off.name}">${off.name}</div>
+                            <div class="font-mono text-secondary small mb-2">NIP: ${off.nip || '-'}</div>
+                            <div class="sig-preview-box">
+                                ${sigContent}
+                            </div>
+                        </div>
+                        <button class="btn btn-outline-secondary btn-sm w-100" onclick="quickUploadSigForOfficer('${off.name}', '${off.nip}', '${off.role}')">
+                            <i class="fa-solid fa-pen-nib me-1"></i> ${off.has_signature ? 'Ganti TTD' : 'Unggah TTD'}
+                        </button>
+                    </div>
+                </div>`;
+        });
+        container.innerHTML = html;
+    }
+
+    function openAddOfficerModal() {
+        document.getElementById("formAddOfficer").reset();
+        new bootstrap.Modal(document.getElementById("addOfficerModal")).show();
+    }
+
+    function quickUploadSigForOfficer(name, nip, role) {
+        document.getElementById("newOfficerName").value = name;
+        document.getElementById("newOfficerNip").value = nip;
+        document.getElementById("newOfficerRole").value = role;
+        new bootstrap.Modal(document.getElementById("addOfficerModal")).show();
+    }
+
+    async function saveOfficerSignature(e) {
+        e.preventDefault();
+        const fileInput = document.getElementById("newOfficerSigFile");
+        const formData = new FormData();
+        formData.append("name", document.getElementById("newOfficerName").value);
+        formData.append("nip", document.getElementById("newOfficerNip").value);
+        formData.append("role", document.getElementById("newOfficerRole").value);
+
+        if (fileInput.files.length > 0) {
+            formData.append("signature_file", fileInput.files[0]);
+        }
+
+        try {
+            const res = await fetch("/api/signatures/officer", {
+                method: "POST",
+                body: formData
+            });
+            const d = await res.json();
+            alert(d.msg || "Tanda tangan berhasil disimpan!");
+            bootstrap.Modal.getInstance(document.getElementById("addOfficerModal")).hide();
+            loadSignatures();
+        } catch (err) {
+            alert("Gagal menyimpan: " + err);
+        }
+    }
+
+    async function deleteOfficer(id, name) {
+        if (!confirm(`Hapus petugas "${name}" beserta tanda tangannya?`)) return;
+        try {
+            const res = await fetch("/api/signatures/delete_officer", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ id: id })
+            });
+            const d = await res.json();
+            alert(d.msg);
+            loadSignatures();
+        } catch (err) {
+            alert("Gagal menghapus: " + err);
+        }
+    }
+
+    // ==========================================
+    // DYNAMIC ASSIGNMENTS MANAGEMENT
+    // ==========================================
+    async function loadAssignments() {
+        try {
+            const res = await fetch("/api/assignments");
+            const data = await res.json();
+            allAssignmentsList = data.assignments || [];
+            renderAssignmentsTable();
+        } catch (err) {
+            console.error("Failed loading assignments:", err);
+        }
+    }
+
+    function renderAssignmentsTable() {
+        const tbody = document.getElementById("assignmentsTableBody");
+        if (allAssignmentsList.length === 0) {
+            tbody.innerHTML = `<tr><td colspan="9" class="text-center py-4 text-muted">Belum ada penugasan sesi. Klik tombol "Tarik dari Portal" untuk membuat matriks jadwal otomatis.</td></tr>`;
+            return;
+        }
+
+        let html = "";
+        allAssignmentsList.forEach(a => {
+            const pwSig = a.pengawas_has_sig 
+                ? `<span class="badge bg-success-subtle text-success border border-success-subtle small font-mono"><i class="fa-solid fa-check"></i> TTD Siap</span>` 
+                : `<span class="badge bg-danger-subtle text-danger border border-danger-subtle small font-mono"><i class="fa-solid fa-xmark"></i> Belum TTD</span>`;
+
+            const proktorSig = a.proktor_has_sig 
+                ? `<span class="badge bg-success-subtle text-success border border-success-subtle small font-mono"><i class="fa-solid fa-check"></i> Siap</span>` 
+                : `<span class="badge bg-warning-subtle text-warning border border-warning-subtle small font-mono">-</span>`;
+
+            html += `
+                <tr>
+                    <td class="text-center font-mono">${a.gelombang}</td>
+                    <td class="font-mono">Hari ${a.hari}</td>
+                    <td class="fw-semibold font-mono small">${a.tanggal || '-'}</td>
+                    <td class="font-mono">Sesi ${a.sesi}</td>
+                    <td>${a.nm_ruang || 'Lab ' + a.lab_num}</td>
+                    <td>
+                        <div class="fw-semibold">${a.pengawas_name || '-'}</div>
+                        <div class="small text-muted font-mono">${pwSig}</div>
+                    </td>
+                    <td>
+                        <div class="small">${a.proktor_name || '-'}</div>
+                    </td>
+                    <td class="text-center">
+                        ${a.pengawas_has_sig && a.proktor_has_sig ? '<span class="badge bg-success small"><i class="fa-solid fa-circle-check me-1"></i>Lengkap</span>' : '<span class="badge bg-warning text-dark small">Kurang TTD</span>'}
+                    </td>
+                    <td class="text-center">
+                        <div class="btn-group btn-group-sm">
+                            <button class="btn btn-outline-secondary" onclick="openEditAssignment('${a.gelombang}', '${a.hari}', '${a.sesi}', '${a.lab_num}')" title="Edit Tanggal & Petugas">
+                                <i class="fa-solid fa-pen"></i>
+                            </button>
+                            <button class="btn btn-outline-primary" onclick="generateAndPrintDocument('BAP', ${a.gelombang}, ${a.hari}, ${a.sesi}, ${a.lab_num})" title="Cetak BAP Lengkap">
+                                <i class="fa-solid fa-print me-1"></i>BAP
+                            </button>
+                            <button class="btn btn-outline-secondary" onclick="generateAndPrintDocument('DH', ${a.gelombang}, ${a.hari}, ${a.sesi}, ${a.lab_num})" title="Cetak Daftar Hadir">
+                                <i class="fa-solid fa-print me-1"></i>DH
+                            </button>
+                            <button class="btn btn-success" onclick="generateAndUploadDocument('BAP', ${a.gelombang}, ${a.hari}, ${a.sesi}, ${a.lab_num})" title="Generate JPG & Upload">
+                                <i class="fa-solid fa-cloud-arrow-up"></i>
+                            </button>
+                        </div>
+                    </td>
+                </tr>`;
+        });
+        tbody.innerHTML = html;
+    }
+
+    function filterAssignmentsTable() {
+        const q = document.getElementById("filterAssignments").value.toLowerCase();
+        const rows = document.querySelectorAll("#assignmentsTableBody tr");
+        rows.forEach(r => {
+            r.style.display = r.innerText.toLowerCase().includes(q) ? "" : "none";
+        });
+    }
+
+    async function syncAssignmentsFromPortal() {
+        if (!confirm("Tarik data jadwal sesi dan nama petugas dari portal TKA?")) return;
+        try {
+            const res = await fetch("/api/assignments/sync_portal", { method: "POST" });
+            const data = await res.json();
+            alert(data.msg);
+            loadAssignments();
+        } catch (err) {
+            alert("Gagal sinkronisasi: " + err);
+        }
+    }
+
+    function openEditAssignment(gel, hari, sesi, lab) {
+        const item = allAssignmentsList.find(a => 
+            String(a.gelombang) === String(gel) &&
+            String(a.hari) === String(hari) &&
+            String(a.sesi) === String(sesi) &&
+            String(a.lab_num) === String(lab)
+        );
+        if (!item) return;
+
+        document.getElementById("editAssGel").value = gel;
+        document.getElementById("editAssHari").value = hari;
+        document.getElementById("editAssSesi").value = sesi;
+        document.getElementById("editAssLab").value = lab;
+        document.getElementById("editAssInfoText").innerText = `Gelombang ${gel} | Hari ${hari} | Sesi ${sesi} | ${item.nm_ruang || 'Lab ' + lab}`;
+
+        document.getElementById("editAssTanggal").value = item.tanggal || "26 Oktober 2026";
+        document.getElementById("editAssJam").value = item.jam || "07:30 - 09:30";
+
+        // Populate dropdowns from allOfficersList
+        const selPengawas = document.getElementById("editAssPengawas");
+        selPengawas.innerHTML = `<option value="">Pilih Pengawas...</option>`;
+        allOfficersList.filter(o => o.role === 'PENGAWAS' || !o.role).forEach(o => {
+            const sel = o.id === item.pengawas_id ? 'selected' : '';
+            selPengawas.innerHTML += `<option value="${o.id}" ${sel}>${o.name} (${o.has_signature ? 'TTD ✓' : 'Belum TTD'})</option>`;
+        });
+
+        const selProktor = document.getElementById("editAssProktor");
+        selProktor.innerHTML = `<option value="">Pilih Proktor...</option>`;
+        allOfficersList.filter(o => o.role === 'PROKTOR').forEach(o => {
+            const sel = o.id === item.proktor_id ? 'selected' : '';
+            selProktor.innerHTML += `<option value="${o.id}" ${sel}>${o.name} (${o.has_signature ? 'TTD ✓' : 'Belum TTD'})</option>`;
+        });
+
+        new bootstrap.Modal(document.getElementById("editAssignmentModal")).show();
+    }
+
+    async function saveAssignmentEdit(e) {
+        e.preventDefault();
+        const payload = {
+            gelombang: document.getElementById("editAssGel").value,
+            hari: document.getElementById("editAssHari").value,
+            sesi: document.getElementById("editAssSesi").value,
+            lab_num: document.getElementById("editAssLab").value,
+            tanggal: document.getElementById("editAssTanggal").value,
+            jam: document.getElementById("editAssJam").value,
+            pengawas_id: document.getElementById("editAssPengawas").value,
+            proktor_id: document.getElementById("editAssProktor").value
+        };
+
+        try {
+            const res = await fetch("/api/assignments/update", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify(payload)
+            });
+            const d = await res.json();
+            bootstrap.Modal.getInstance(document.getElementById("editAssignmentModal")).hide();
+            loadAssignments();
+        } catch (err) {
+            alert("Gagal menyimpan: " + err);
+        }
+    }
+
+    function openBatchAssignmentModal() {
+        const selP = document.getElementById("batchNewPengawas");
+        selP.innerHTML = `<option value="">-- Tidak diubah --</option>`;
+        allOfficersList.filter(o => o.role === 'PENGAWAS').forEach(o => {
+            selP.innerHTML += `<option value="${o.id}">${o.name}</option>`;
+        });
+
+        const selPr = document.getElementById("batchNewProktor");
+        selPr.innerHTML = `<option value="">-- Tidak diubah --</option>`;
+        allOfficersList.filter(o => o.role === 'PROKTOR').forEach(o => {
+            selPr.innerHTML += `<option value="${o.id}">${o.name}</option>`;
+        });
+
+        new bootstrap.Modal(document.getElementById("batchAssignmentModal")).show();
+    }
+
+    async function saveBatchAssignment(e) {
+        e.preventDefault();
+        const target = document.getElementById("batchFilterTarget").value;
+        const filter = {};
+        if (target.startsWith("hari_")) {
+            filter.hari = target.split("_")[1];
+        }
+
+        const updates = {};
+        const tgl = document.getElementById("batchNewTanggal").value.trim();
+        if (tgl) updates.tanggal = tgl;
+        const pw = document.getElementById("batchNewPengawas").value;
+        if (pw) updates.pengawas_id = pw;
+        const pr = document.getElementById("batchNewProktor").value;
+        if (pr) updates.proktor_id = pr;
+
+        try {
+            const res = await fetch("/api/assignments/batch_update", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ filter, updates })
+            });
+            const d = await res.json();
+            alert(d.msg);
+            bootstrap.Modal.getInstance(document.getElementById("batchAssignmentModal")).hide();
+            loadAssignments();
+        } catch (err) {
+            alert("Gagal batch update: " + err);
+        }
+    }
+
+    // Direct Print
+    function generateAndPrintDocument(docType, gel, hari, sesi, lab) {
+        const url = `/document/print/${docType}/${gel}/${hari}/${sesi}/${lab}`;
+        window.open(url, "_blank", "width=850,height=1100");
+    }
+
+    // Direct Generate JPG & Upload to Portal
+    async function generateAndUploadDocument(docType, gel, hari, sesi, lab) {
+        if (!confirm(`Tempel TTD & Stempel, lalu langsung unggah berkas ${docType} Hari ${hari} Sesi ${sesi} ke portal TKA?`)) return;
+        
+        try {
+            const res = await fetch("/api/document/direct_upload", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                    doc_type: docType,
+                    gelombang: gel,
+                    hari: hari,
+                    sesi: sesi,
+                    lab_num: lab
+                })
+            });
+            const d = await res.json();
+            alert(d.msg || (d.success ? "Berhasil diunggah!" : "Gagal diunggah."));
+            loadAssignments();
+            loadSlots();
+        } catch (err) {
+            alert("Terjadi kesalahan saat unggah: " + err);
+        }
+    }
+
+</script>
 <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
 <script>
     let currentQueue = [];
@@ -2837,5 +3676,189 @@
         }
     }
 </script>
+
+<!-- PHOTO LIGHTBOX MODAL -->
+<div class="modal fade" id="photoLightboxModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-lg modal-dialog-centered">
+        <div class="modal-content shadow-lg border-0" style="border-radius: 12px; overflow: hidden;">
+            <div class="modal-header py-2 px-3 bg-light border-bottom">
+                <div class="d-flex align-items-center gap-2">
+                    <span class="badge bg-primary px-2" id="lightboxDocType">BAP</span>
+                    <h6 class="modal-title fw-bold text-dark mb-0 small" id="lightboxTitle">Pratinjau Berkas Fisik</h6>
+                </div>
+                <div class="d-flex align-items-center gap-2">
+                    <button type="button" class="btn btn-sm btn-outline-secondary" onclick="rotateLightbox(90)" title="Putar 90°"><i class="fa-solid fa-rotate-right"></i></button>
+                    <button type="button" class="btn btn-sm btn-outline-secondary" onclick="zoomLightbox(0.2)" title="Perbesar"><i class="fa-solid fa-magnifying-glass-plus"></i></button>
+                    <button type="button" class="btn btn-sm btn-outline-secondary" onclick="zoomLightbox(-0.2)" title="Perkecil"><i class="fa-solid fa-magnifying-glass-minus"></i></button>
+                    <button type="button" class="btn btn-sm btn-outline-secondary" onclick="resetLightboxZoom()" title="Reset"><i class="fa-solid fa-arrows-to-dot"></i></button>
+                    <a id="lightboxDownloadBtn" href="#" download class="btn btn-sm btn-outline-primary" title="Unduh"><i class="fa-solid fa-download"></i></a>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+            </div>
+            <div class="modal-body p-0 text-center bg-dark bg-opacity-10" style="min-height: 520px; max-height: 75vh; overflow: auto; display: flex; align-items: center; justify-content: center;">
+                <img id="lightboxImage" src="" alt="Pratinjau" style="max-height: 70vh; max-width: 95%; transition: transform 0.2s ease; border-radius: 4px; box-shadow: 0 4px 20px rgba(0,0,0,0.25);">
+            </div>
+            <div class="modal-footer py-2 px-3 bg-light border-top d-flex justify-content-between align-items-center">
+                <div class="small text-secondary" style="font-size: 0.75rem;">
+                    <span id="lightboxFilename" class="font-mono text-dark fw-semibold">-</span> | 
+                    <span id="lightboxTimestamp">-</span> | 
+                    <span id="lightboxFilesize">-</span>
+                </div>
+                <button type="button" class="btn btn-secondary btn-sm px-3" data-bs-dismiss="modal">Tutup</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- EDIT ASSIGNMENT MODAL -->
+<div class="modal fade" id="editAssignmentModal" tabindex="-1">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content border-0 shadow">
+            <div class="modal-header py-3 px-4 bg-light border-bottom">
+                <h6 class="modal-title fw-bold mb-0"><i class="fa-solid fa-pen-to-square text-primary me-2"></i>Edit Penugasan Sesi</h6>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body p-4">
+                <form id="formEditAssignment" onsubmit="saveAssignmentEdit(event)">
+                    <input type="hidden" id="editAssGel">
+                    <input type="hidden" id="editAssHari">
+                    <input type="hidden" id="editAssSesi">
+                    <input type="hidden" id="editAssLab">
+                    
+                    <div class="alert alert-secondary py-2 px-3 small font-mono mb-3" id="editAssInfoText">-</div>
+                    
+                    <div class="mb-3">
+                        <label class="form-label small fw-semibold mb-1">Tanggal Pelaksanaan</label>
+                        <input type="text" class="form-control form-control-sm" id="editAssTanggal" placeholder="Contoh: 26 Oktober 2026" required>
+                    </div>
+
+                    <div class="mb-3">
+                        <label class="form-label small fw-semibold mb-1">Jam Pelaksanaan</label>
+                        <input type="text" class="form-control form-control-sm font-mono" id="editAssJam" placeholder="07:30 - 09:30" required>
+                    </div>
+
+                    <div class="mb-3">
+                        <label class="form-label small fw-semibold mb-1">Pengawas Ruang</label>
+                        <select class="form-select form-select-sm" id="editAssPengawas">
+                            <option value="">Pilih Pengawas...</option>
+                        </select>
+                    </div>
+
+                    <div class="mb-3">
+                        <label class="form-label small fw-semibold mb-1">Proktor</label>
+                        <select class="form-select form-select-sm" id="editAssProktor">
+                            <option value="">Pilih Proktor...</option>
+                        </select>
+                    </div>
+
+                    <div class="d-flex justify-content-end gap-2 pt-2 border-top">
+                        <button type="button" class="btn btn-outline-secondary btn-sm" data-bs-dismiss="modal">Batal</button>
+                        <button type="submit" class="btn btn-primary btn-sm px-3">Simpan Perubahan</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- BATCH ASSIGNMENT MODAL -->
+<div class="modal fade" id="batchAssignmentModal" tabindex="-1">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content border-0 shadow">
+            <div class="modal-header py-3 px-4 bg-light border-bottom">
+                <h6 class="modal-title fw-bold mb-0"><i class="fa-solid fa-layer-group text-primary me-2"></i>Ubah Massal Jadwal / Petugas</h6>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body p-4">
+                <form id="formBatchAssignment" onsubmit="saveBatchAssignment(event)">
+                    <div class="mb-3">
+                        <label class="form-label small fw-semibold mb-1">Terapkan Perubahan Pada</label>
+                        <select class="form-select form-select-sm" id="batchFilterTarget">
+                            <option value="hari_1">Semua Sesi di Hari 1</option>
+                            <option value="hari_2">Semua Sesi di Hari 2</option>
+                            <option value="hari_3">Semua Sesi di Hari 3</option>
+                            <option value="hari_4">Semua Sesi di Hari 4</option>
+                            <option value="all">Semua Sesi di Seluruh Hari</option>
+                        </select>
+                    </div>
+
+                    <div class="mb-3">
+                        <label class="form-label small fw-semibold mb-1">Ubah Tanggal Menjadi</label>
+                        <input type="text" class="form-control form-control-sm" id="batchNewTanggal" placeholder="Biarkan kosong jika tidak diubah">
+                    </div>
+
+                    <div class="mb-3">
+                        <label class="form-label small fw-semibold mb-1">Ubah Pengawas Menjadi</label>
+                        <select class="form-select form-select-sm" id="batchNewPengawas">
+                            <option value="">-- Tidak diubah --</option>
+                        </select>
+                    </div>
+
+                    <div class="mb-3">
+                        <label class="form-label small fw-semibold mb-1">Ubah Proktor Menjadi</label>
+                        <select class="form-select form-select-sm" id="batchNewProktor">
+                            <option value="">-- Tidak diubah --</option>
+                        </select>
+                    </div>
+
+                    <div class="d-flex justify-content-end gap-2 pt-2 border-top">
+                        <button type="button" class="btn btn-outline-secondary btn-sm" data-bs-dismiss="modal">Batal</button>
+                        <button type="submit" class="btn btn-primary btn-sm px-3">Terapkan Massal</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- ADD / UPLOAD OFFICER MODAL -->
+<div class="modal fade" id="addOfficerModal" tabindex="-1">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content border-0 shadow">
+            <div class="modal-header py-3 px-4 bg-light border-bottom">
+                <h6 class="modal-title fw-bold mb-0"><i class="fa-solid fa-signature text-success me-2"></i>Tambah Petugas & Unggah TTD</h6>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body p-4">
+                <div class="alert alert-info py-2 px-3 small border-0 mb-3">
+                    <i class="fa-solid fa-circle-info me-1"></i> Jika Nama atau NIP sudah ada, sistem akan langsung menghubungkan tanda tangan yang tersimpan (di-skip).
+                </div>
+                <form id="formAddOfficer" onsubmit="saveOfficerSignature(event)">
+                    <div class="mb-3">
+                        <label class="form-label small fw-semibold mb-1">Nama Petugas (Lengkap dengan Gelar)</label>
+                        <input type="text" class="form-control form-control-sm" id="newOfficerName" placeholder="Contoh: Abdurrohim, S.Kom" required>
+                    </div>
+
+                    <div class="row g-2 mb-3">
+                        <div class="col-7">
+                            <label class="form-label small fw-semibold mb-1">NIP Petugas</label>
+                            <input type="text" class="form-control form-control-sm font-mono" id="newOfficerNip" placeholder="197804222024211001">
+                        </div>
+                        <div class="col-5">
+                            <label class="form-label small fw-semibold mb-1">Peran</label>
+                            <select class="form-select form-select-sm" id="newOfficerRole">
+                                <option value="PENGAWAS">Pengawas</option>
+                                <option value="PROKTOR">Proktor</option>
+                                <option value="KEPALA_SEKOLAH">Kepala Sekolah</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    <div class="mb-3">
+                        <label class="form-label small fw-semibold mb-1">Berkas Tanda Tangan (PNG Transparan / Putih)</label>
+                        <input type="file" class="form-control form-control-sm" id="newOfficerSigFile" accept="image/png,image/jpeg">
+                        <div class="form-text" style="font-size: 0.72rem;">Sistem otomatis membersihkan latar belakang putih menjadi transparan.</div>
+                    </div>
+
+                    <div class="d-flex justify-content-end gap-2 pt-2 border-top">
+                        <button type="button" class="btn btn-outline-secondary btn-sm" data-bs-dismiss="modal">Batal</button>
+                        <button type="submit" class="btn btn-success btn-sm px-3">Simpan Tanda Tangan</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+
 </body>
 </html>

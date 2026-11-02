@@ -34,7 +34,7 @@ if env_file.exists():
                 os.environ.setdefault(k.strip(), v.strip())
 
 # Application Metadata & GitHub Repository for Updates
-APP_VERSION = os.getenv("APP_VERSION", "v1.0.6")
+APP_VERSION = os.getenv("APP_VERSION", "v1.1.0")
 GITHUB_REPO = os.getenv("GITHUB_REPO", "ardianryan/tka-tools")
 
 # TKA Portal Credentials (Default kosong untuk keamanan open-source, atur via settings.json atau Dashboard)
@@ -56,7 +56,12 @@ LOGS_DIR = BASE_DIR / "logs"
 LOG_CSV_PATH = LOGS_DIR / "riwayat_unggah.csv"
 LOG_JSON_PATH = LOGS_DIR / "riwayat_unggah.jsonl"
 
-for p in [INBOX_DIR, PROCESSED_DIR, DUPLICATES_DIR, UPLOAD_TEMP_DIR, LOGS_DIR]:
+# E-Signature & Stamp Storage Paths
+SIGNATURES_DIR = USER_DATA_DIR / "signatures"
+STAMPS_DIR = USER_DATA_DIR / "stamps"
+GENERATED_DOCS_DIR = BASE_DIR / "DokumenTKA" / "generated"
+
+for p in [INBOX_DIR, PROCESSED_DIR, DUPLICATES_DIR, UPLOAD_TEMP_DIR, LOGS_DIR, SIGNATURES_DIR, STAMPS_DIR, GENERATED_DOCS_DIR]:
     p.mkdir(parents=True, exist_ok=True)
 
 # Security Allowlist for file uploads & previews
