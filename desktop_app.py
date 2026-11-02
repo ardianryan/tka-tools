@@ -8,9 +8,10 @@ import logging
 
 # Ensure pyinstaller splash screen closes if present
 try:
-    import pyi_splash
-    pyi_splash.close()
-except ImportError:
+    if "_PYI_SPLASH_IPC" in os.environ:
+        import pyi_splash
+        pyi_splash.close()
+except Exception:
     pass
 
 # Ensure stdout/stderr are valid in Windows windowed (noconsole) mode
