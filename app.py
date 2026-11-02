@@ -197,13 +197,16 @@ sync_lock = threading.Lock()
 def sync_portal_slots():
     with sync_lock:
         try:
-            # Auto-authenticate if credentials exist but session expired or not authenticated
-            if not tka_client.is_authenticated and tka_client.username and tka_client.password:
-                logger.info("Portal session not authenticated. Attempting auto-login for %s...", tka_client.username)
-                try:
-                    tka_client.login()
-                except Exception as auth_err:
-                    logger.debug("Auto-login attempt failed: %s", auth_err)
+            # First, check if session is still valid before attempting blind login
+            if not tka_client.is_authenticated:
+                if tka_client.verify_session():
+                    logger.info("Session verified and active for %s", tka_client.username)
+                elif tka_client.username and tka_client.password and not tka_client.require_captcha:
+                    logger.info("Portal session not authenticated. Attempting auto-login for %s...", tka_client.username)
+                    try:
+                        tka_client.login()
+                    except Exception as auth_err:
+                        logger.debug("Auto-login attempt failed: %s", auth_err)
 
             bap = tka_client.get_pelaksanaan_slots()
             dh = tka_client.get_absen_slots()
@@ -459,22 +462,46 @@ def api_settings():
         if "scanner" in data:
             settings["scanner"].update(data["scanner"])
         if "portal" in data:
+            old_user = (settings.get("portal", {}).get("username") or "").strip()
+            old_pass = (settings.get("portal", {}).get("password") or "").strip()
+            old_url = (settings.get("portal", {}).get("base_url") or "").strip()
+
             settings["portal"].update(data["portal"])
-            tka_client.username = settings["portal"]["username"]
-            tka_client.password = settings["portal"]["password"]
-            tka_client.base_url = settings["portal"]["base_url"]
+            new_user = (settings["portal"].get("username") or "").strip()
+            new_pass = (settings["portal"].get("password") or "").strip()
+            new_url = (settings["portal"].get("base_url") or "").strip()
+
+            tka_client.username = new_user
+            tka_client.password = new_pass
+            tka_client.base_url = new_url
             tka_client._parse_user_kode()
-            tka_client.is_authenticated = False
+
+            # ONLY invalidate session if credentials actually changed!
+            if old_user != new_user or old_pass != new_pass or old_url != new_url:
+                logger.info("Portal credentials changed in settings. Resetting authentication state.")
+                tka_client.is_authenticated = False
+                tka_client.csrf_token = None
+            else:
+                # Credentials unchanged: maintain active authenticated session
+                if not tka_client.is_authenticated:
+                    tka_client.verify_session()
+
         if "ocr_rules" in data:
             settings["ocr_rules"].update(data["ocr_rules"])
         if "upload" in data:
             settings["upload"].update(data["upload"])
         save_settings(settings)
-        return jsonify({"success": True, "settings": settings})
+        return jsonify({
+            "success": True,
+            "settings": settings,
+            "portal_connected": tka_client.is_authenticated
+        })
     else:
         return jsonify({
             "settings": load_settings(),
-            "available_scanners": scanner.list_devices()
+            "available_scanners": scanner.list_devices(),
+            "portal_connected": tka_client.is_authenticated,
+            "require_captcha": tka_client.require_captcha
         })
 
 @app.route("/api/scanner/devices")
@@ -505,6 +532,9 @@ def api_portal_login():
         settings["portal"]["password"] = password
         settings["portal"]["base_url"] = base_url
         save_settings(settings)
+        tka_client.is_authenticated = True
+        tka_client.require_captcha = False
+        tka_client.save_session()
         threading.Thread(target=sync_portal_slots, daemon=True).start()
         return jsonify({"success": True, "msg": "Berhasil terhubung ke Portal TKA!"})
     else:

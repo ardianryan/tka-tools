@@ -6,6 +6,18 @@ Format berkas ini mengacu pada [Keep a Changelog](https://keepachangelog.com/id/
 
 ---
 
+## [1.0.6] - 2026-11-02
+
+### Diperbaiki (Fixed)
+- **Pencegahan Pemutusan Sesi Portal Saat Simpan Pengaturan (Preserve Active Session)**:
+  - Mengatasi bug kritis di mana sesi portal yang baru saja berhasil login dengan CAPTCHA langsung diputus (`is_authenticated = False`) saat tombol *"Simpan Pengaturan"* ditekan.
+  - Endpoint `/api/settings` kini mempertahankan status autentikasi aktif jika username/password tidak berubah.
+  - Memperbaiki `sync_portal_slots`: memverifikasi keabsahan sesi aktif terlebih dahulu (`verify_session()`) sebelum melakukan upaya login otomatis guna mencegah sesi kedaluwarsa akibat login tanpa CAPTCHA.
+  - Tab *"Akun Portal TKA"* kini menampilkan status sesi secara visual: indikator hijau saat terhubung aktif (tanpa perlu mengisi CAPTCHA ulang) dan formulir CAPTCHA hanya muncul jika sesi benar-benar terputus.
+  - Sinkronisasi portal kini mendukung mode latar belakang tanpa memunculkan popup yang mengganggu alur kerja pengguna.
+
+---
+
 ## [1.0.5] - 2026-10-29
 
 ### Diperbaiki (Fixed)

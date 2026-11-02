@@ -972,6 +972,7 @@
 
                     <!-- Tab Portal -->
                     <div class="tab-pane fade" id="tab-portal">
+                        <div id="cfgPortalStatusAlert" class="mb-3 d-none"></div>
                         <div class="mb-3">
                             <label class="form-label small fw-bold">Alamat Portal TKA:</label>
                             <input type="text" class="form-control form-control-sm font-mono" id="cfgPortalUrl" value="https://tka.kemendikdasmen.go.id">
@@ -1855,38 +1856,48 @@
         }
     }
 
-    async function syncPortalData() {
-        Swal.fire({
-            title: 'Sinkronisasi Portal TKA...',
-            text: 'Menghubungkan ke https://tka.kemendikdasmen.go.id...',
-            allowOutsideClick: false,
-            didOpen: () => Swal.showLoading()
-        });
+    async function syncPortalData(silent = false) {
+        if (!silent) {
+            Swal.fire({
+                title: 'Sinkronisasi Portal TKA...',
+                text: 'Menghubungkan ke https://tka.kemendikdasmen.go.id...',
+                allowOutsideClick: false,
+                didOpen: () => Swal.showLoading()
+            });
+        }
         try {
             const res = await fetch("/api/sync", {method: "POST"});
             const data = await res.json();
             if (data.success) {
-                Swal.fire('Sinkronisasi Berhasil!', data.msg, 'success');
+                if (!silent) {
+                    Swal.fire('Sinkronisasi Berhasil!', data.msg, 'success');
+                }
                 loadSlots();
                 refreshStatus();
-            } else if (data.require_captcha || data.msg.includes("CAPTCHA") || data.msg.includes("kedaluwarsa")) {
-                const ask = await Swal.fire({
-                    title: 'Sesi Portal Kedaluwarsa',
-                    text: 'Sesi login ke portal TKA telah berakhir dan server memerlukan verifikasi kode keamanan (CAPTCHA). Masukkan kode CAPTCHA sekarang?',
-                    icon: 'warning',
-                    showCancelButton: true,
-                    confirmButtonText: '<i class="fa-solid fa-right-to-bracket me-1"></i> Masukkan CAPTCHA',
-                    cancelButtonText: 'Tutup',
-                    confirmButtonColor: '#2563eb'
-                });
-                if (ask.isConfirmed) {
-                    openScannerSettings(2);
+            } else if (data.require_captcha || (data.msg && (data.msg.includes("CAPTCHA") || data.msg.includes("kedaluwarsa")))) {
+                if (!silent) {
+                    const ask = await Swal.fire({
+                        title: 'Sesi Portal Kedaluwarsa',
+                        text: 'Sesi login ke portal TKA telah berakhir dan server memerlukan verifikasi kode keamanan (CAPTCHA). Masukkan kode CAPTCHA sekarang?',
+                        icon: 'warning',
+                        showCancelButton: true,
+                        confirmButtonText: '<i class="fa-solid fa-right-to-bracket me-1"></i> Masukkan CAPTCHA',
+                        cancelButtonText: 'Tutup',
+                        confirmButtonColor: '#2563eb'
+                    });
+                    if (ask.isConfirmed) {
+                        openScannerSettings(2);
+                    }
                 }
             } else {
-                Swal.fire('Gagal Sinkronisasi', data.msg || 'Tidak dapat terhubung.', 'error');
+                if (!silent) {
+                    Swal.fire('Gagal Sinkronisasi', data.msg || 'Tidak dapat terhubung.', 'error');
+                }
             }
         } catch (err) {
-            Swal.fire('Error', '' + err, 'error');
+            if (!silent) {
+                Swal.fire('Error', '' + err, 'error');
+            }
         }
     }
 
@@ -2213,13 +2224,32 @@
             document.getElementById("cfgDateDayMap").value = JSON.stringify(r.date_day_map || {"26": 1, "27": 2, "28": 3, "29": 4});
             document.getElementById("cfgServerPrefix").value = r.server_prefix || "";
 
+            // Update Portal status alert in Tab 2
+            const alertEl = document.getElementById("cfgPortalStatusAlert");
+            const capGroup = document.getElementById("cfgPortalCaptchaGroup");
+            if (alertEl) {
+                if (data.portal_connected) {
+                    alertEl.className = "alert alert-success py-2 px-3 mb-3 small d-flex align-items-center gap-2 border-0";
+                    alertEl.innerHTML = '<i class="fa-solid fa-circle-check fs-5 text-success"></i><div><b>Status: Terhubung & Aktif</b><br><span class="text-secondary" style="font-size: 0.76rem;">Sesi portal Anda saat ini aktif. Anda tidak perlu memasukkan CAPTCHA kecuali ingin berganti akun.</span></div>';
+                    alertEl.classList.remove("d-none");
+                    if (capGroup) capGroup.classList.add("d-none");
+                } else {
+                    alertEl.className = "alert alert-warning py-2 px-3 mb-3 small d-flex align-items-center gap-2 border-0";
+                    alertEl.innerHTML = '<i class="fa-solid fa-triangle-exclamation fs-5 text-warning"></i><div><b>Status: Sesi Terputus / Perlu Login</b><br><span class="text-secondary" style="font-size: 0.76rem;">Masukkan password & kode keamanan (CAPTCHA) di bawah, lalu klik Uji Koneksi & Login.</span></div>';
+                    alertEl.classList.remove("d-none");
+                    if (capGroup) capGroup.classList.remove("d-none");
+                }
+            }
+
             const modal = new bootstrap.Modal(document.getElementById("settingsModal"));
             modal.show();
 
             if (tabIndex === 2) {
                 const btnPortal = document.querySelector('button[data-bs-target="#tab-portal"]');
                 if (btnPortal) bootstrap.Tab.getOrCreateInstance(btnPortal).show();
-                reloadPortalCaptcha('cfg');
+                if (!data.portal_connected || data.require_captcha) {
+                    reloadPortalCaptcha('cfg');
+                }
             }
         } catch (err) {
             Swal.fire('Error', 'Gagal memuat pengaturan: ' + err, 'error');
@@ -2261,8 +2291,15 @@
             });
             const data = await res.json();
             if (data.success) {
-                Swal.fire('Tersimpan', 'Pengaturan scanner & portal berhasil diperbarui.', 'success');
-                bootstrap.Modal.getInstance(document.getElementById("settingsModal")).hide();
+                Swal.fire({
+                    icon: 'success',
+                    title: 'Tersimpan',
+                    text: 'Pengaturan scanner & portal berhasil diperbarui.',
+                    timer: 1800,
+                    showConfirmButton: false
+                });
+                const modal = bootstrap.Modal.getInstance(document.getElementById("settingsModal"));
+                if (modal) modal.hide();
                 refreshStatus();
             } else {
                 Swal.fire('Gagal', 'Gagal menyimpan pengaturan.', 'error');
@@ -2321,12 +2358,21 @@
             if (data.success) {
                 if (capGroup) capGroup.classList.add("d-none");
                 if (capSec) capSec.value = "";
+                const alertEl = document.getElementById("cfgPortalStatusAlert");
+                if (alertEl) {
+                    alertEl.className = "alert alert-success py-2 px-3 mb-3 small d-flex align-items-center gap-2 border-0";
+                    alertEl.innerHTML = '<i class="fa-solid fa-circle-check fs-5 text-success"></i><div><b>Status: Terhubung & Aktif</b><br><span class="text-secondary" style="font-size: 0.76rem;">Sesi portal Anda saat ini aktif. Jadwal telah disinkronkan.</span></div>';
+                    alertEl.classList.remove("d-none");
+                }
                 Swal.fire({
                     icon: 'success',
                     title: 'Berhasil Terhubung!',
-                    text: data.msg || 'Login ke Portal TKA sukses dan jadwal telah disinkronkan.'
+                    text: data.msg || 'Login ke Portal TKA sukses dan jadwal telah disinkronkan.',
+                    timer: 2000,
+                    showConfirmButton: false
                 });
                 refreshStatus();
+                loadSlots();
             } else if (data.require_captcha) {
                 if (capGroup) {
                     capGroup.classList.remove("d-none");
