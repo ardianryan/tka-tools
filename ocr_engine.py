@@ -25,10 +25,10 @@ except Exception:
     pass
 
 HARI_MAP = {
-    "senin": 1, "senln": 1, "semn": 1,
-    "selasa": 2, "seiasa": 2, "selaza": 2,
-    "rabu": 3, "rabv": 3,
-    "kamis": 4, "kamls": 4,
+    "senin": 1, "senln": 1, "semn": 1, "eenin": 1, "genin": 1,
+    "selasa": 2, "seiasa": 2, "selaza": 2, "gelaea": 2, "selaee": 2,
+    "rabu": 3, "rabv": 3, "rebu": 3, "r4bu": 3,
+    "kamis": 4, "kamls": 4, "kemis": 4,
     "jumat": 5, "jum'at": 5,
     "sabtu": 6
 }
@@ -57,7 +57,7 @@ def parse_tka_document(ocr_lines: list, full_text: str, header_lines: list = Non
     rules = load_settings().get("ocr_rules", {})
     day_name_map = rules.get("day_name_map", HARI_MAP)
     date_day_map = rules.get("date_day_map", TANGGAL_HARI_MAP)
-    room_patterns = rules.get("room_regex", [r'Lab\s*([1-9])', r'Ruang\s*([0-9]+)'])
+    room_patterns = rules.get("room_regex", [r'(?:Lab|Leb|Laboratorium)\s*([1-9])', r'Ruang\s*([0-9]+)'])
     server_prefix = rules.get("server_prefix", "")
 
     doc = {
@@ -103,7 +103,7 @@ def parse_tka_document(ocr_lines: list, full_text: str, header_lines: list = Non
         if doc["lab_num"]:
             break
     if not doc["lab_num"]:
-        m_lab_alt = re.search(r'\b\d\s+Lab\s*([1-9])', text, re.I)
+        m_lab_alt = re.search(r'\b(?:\d\s+)?(?:Lab|Leb|Laboratorium)\s*([1-9])\b', text, re.I)
         if m_lab_alt:
             doc["lab_num"] = int(m_lab_alt.group(1))
             doc["ruang"] = f"Lab {doc['lab_num']}"
@@ -129,12 +129,25 @@ def parse_tka_document(ocr_lines: list, full_text: str, header_lines: list = Non
         if re.search(rf'\b{day_name}\b', text, re.I):
             doc["hari"] = day_num
             break
+    if not doc["hari"]:
+        if re.search(r'\b(?:rebu|rabu)\b', text, re.I):
+            doc["hari"] = 3
+        elif re.search(r'\b(?:gelaea|selaee|selasa)\b', text, re.I):
+            doc["hari"] = 2
+        elif re.search(r'\b(?:eenin|genin|senin)\b', text, re.I):
+            doc["hari"] = 1
+        elif re.search(r'\b(?:kemis|kamis)\b', text, re.I):
+            doc["hari"] = 4
 
-    # Format: "27 Oktober 2026", "2 November 2026", "02 Nopember 2026", etc.
+    # Format: "27 Oktober 2026", "2 November 2026", "02 Nopember 2026", "tanggal 02 bulan November 2026", "2B Oktober", "og November"
     MONTH_REGEX = r'(Januari|Februari|Maret|April|Mei|Juni|Juli|Agustus|September|Oktober|November|Nopember|Desember)'
-    m_tgl = re.search(rf'(\d{{1,2}})\s+{MONTH_REGEX}(?:\s+(\d{{4}}))?', text, re.I)
+    m_tgl = re.search(rf'(\d{{1,2}}|[0-2][Bb]|[Oo0-9][0-9gG])\s*(?:bulan)?\s*{MONTH_REGEX}(?:\s+(\d{{4}}))?', text, re.I)
     if m_tgl:
-        tgl_day = int(m_tgl.group(1))
+        raw_day = m_tgl.group(1).upper().replace("B", "8").replace("O", "0").replace("G", "9")
+        try:
+            tgl_day = int(raw_day)
+        except ValueError:
+            tgl_day = 28
         tgl_month = m_tgl.group(2).capitalize().replace("Nopember", "November")
         tgl_year = m_tgl.group(3) or "2026"
         doc["tanggal"] = f"{tgl_day} {tgl_month} {tgl_year}"
@@ -283,19 +296,26 @@ def parse_tka_document(ocr_lines: list, full_text: str, header_lines: list = Non
         if not doc["sesi"] and sesi_from_jam:
             doc["sesi"] = sesi_from_jam
 
-        # E. Extract Student Participants Fingerprint & Sesi Range Verification (DH only)
+        # E. Extract Student Participants Fingerprint & Sesi / Lab / Gelombang Deduction (DH only)
         pats = sorted(list(set(re.findall(r'0005\d{4,5}', full_text))))
         doc["participants"] = pats
-        if pats and not doc["sesi"]:
-            first_num = re.search(r'0005(\d{4})', pats[0])
-            if first_num:
-                idx = int(first_num.group(1))
-                if 1 <= idx <= 80:
-                    doc["sesi"] = 1
-                elif 81 <= idx <= 160:
-                    doc["sesi"] = 2
-                elif 161 <= idx <= 240:
-                    doc["sesi"] = 3
+        if pats:
+            for p in pats:
+                m_idx = re.search(r'0005(\d{4})', p)
+                if m_idx:
+                    idx = int(m_idx.group(1))
+                    if 1 <= idx <= 480:
+                        calc_gel = 1 if idx <= 240 else 2
+                        calc_sesi = ((idx - 1) % 240) // 80 + 1
+                        calc_lab = (((idx - 1) % 80) // 20) + 1
+                        if not doc.get("detected_gelombang"):
+                            doc["detected_gelombang"] = calc_gel
+                        if not doc.get("sesi"):
+                            doc["sesi"] = calc_sesi
+                        if not doc.get("lab_num"):
+                            doc["lab_num"] = calc_lab
+                            doc["ruang"] = f"Lab {calc_lab}"
+                        break
     else:
         # Unknown document type fallback
         if sesi_from_jam:
@@ -304,6 +324,26 @@ def parse_tka_document(ocr_lines: list, full_text: str, header_lines: list = Non
             m_sesi = re.search(r'\bSesi\s*[:\s]*([1-3])\b', text, re.I)
             if m_sesi:
                 doc["sesi"] = int(m_sesi.group(1))
+
+    # Participant fallback deduction for any document type if still missing sesi or lab
+    if not doc.get("participants"):
+        pats = sorted(list(set(re.findall(r'0005\d{4,5}', full_text))))
+        if pats:
+            doc["participants"] = pats
+    if doc.get("participants") and (not doc.get("sesi") or not doc.get("lab_num") or not doc.get("detected_gelombang")):
+        for p in doc["participants"]:
+            m_idx = re.search(r'0005(\d{4})', p)
+            if m_idx:
+                idx = int(m_idx.group(1))
+                if 1 <= idx <= 480:
+                    if not doc.get("detected_gelombang"):
+                        doc["detected_gelombang"] = 1 if idx <= 240 else 2
+                    if not doc.get("sesi"):
+                        doc["sesi"] = ((idx - 1) % 240) // 80 + 1
+                    if not doc.get("lab_num"):
+                        doc["lab_num"] = (((idx - 1) % 80) // 20) + 1
+                        doc["ruang"] = f"Lab {doc['lab_num']}"
+                    break
 
     # 7. Mapel determination (from Hari or text)
     if "Bahasa Indonesia" in text:

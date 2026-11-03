@@ -2210,7 +2210,7 @@
                     showConfirmButton: false
                 });
                 await loadQueue();
-                await checkStatus();
+                await refreshStatus();
             } else {
                 Swal.fire('Gagal', data.msg, 'error');
             }

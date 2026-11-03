@@ -9,6 +9,12 @@ Format berkas ini mengacu pada [Keep a Changelog](https://keepachangelog.com/id/
 ## [1.1.1] - 2026-11-03
 
 ### Diperbaiki (Fixed)
+- **Resolusi Total Masalah Deteksi Duplikat (*Deep Deduplication & OCR Engine Fix*)**:
+  - **Isolasi Antar Hari pada Evaluasi Duplikat**: Memperbaiki `find_duplicate_in_queue` di mana berkas pada hari yang berbeda (misal Hari 2 dan Hari 3) sebelumnya salah terdeteksi sebagai duplikat rangkap 2 dari Hari 1 akibat kesamaan nomor peserta siswa dalam satu lab. Kini evaluasi memeriksa kesamaan eksak `hari`, `sesi`, dan `lab_num` terlebih dahulu.
+  - **Toleransi Typo OCR Hari & Ruang**: Menambahkan penanganan otomatis kesalahan OCR pada nama hari (`rebu` -> Rabu, `gelaea`/`selaee` -> Selasa, `eenin`/`genin` -> Senin, `kemis` -> Kamis) serta nama ruang (`Leb` -> Lab).
+  - **Dukungan Format Tanggal Lengkap & Normalisasi Angka**: Menangani variasi format tanggal BAP/DH yang menyertakan kata `bulan` serta typo digit (`2B Oktober` -> 28, `og November` -> 03).
+  - **Deduksi Matematis Rentang Nomor Peserta (1..480)**: Mendeteksi sesi, lab, dan gelombang secara matematis berdasarkan rentang nomor peserta ujian nasional TKA (0001..0240 untuk Gelombang 1; 0241..0480 untuk Gelombang 2).
+  - **Perbaikan Tombol "Pakai Ini" pada Berkas Duplikat**: Memperbaiki fungsi `forceReady()` di `index.html` dari pemanggilan fungsi tak terdefinisi `checkStatus()` menjadi `refreshStatus()`.
 - **Perbaikan Masalah Timpa Gelombang (*Cross-Gelombang Overwrite Fix*)**:
   - **Penarikan Tanggal Resmi BAP Dinamis (`get_bap_dates_map`)**: Mengambil tanggal pelaksanaan riil langsung dari API portal BAP (`POST /api/v2/pelaksanaan/cetak`) untuk setiap kombinasi `(gelombang, hari)`. Tanggal disimpan dalam cache persisten (`bap_dates_map.json`) sehingga sistem secara otomatis mengetahui bahwa Gelombang 1 berlangsung pada akhir Oktober 2026 (26–29 Oktober) dan Gelombang 2 berlangsung pada awal November 2026 (2–5 November).
   - **Inference Gelombang pada OCR Engine**: Ekstraksi bulan dan tanggal pada lembar Daftar Hadir (DH) dan Berita Acara (BAP). Dokumen dengan bulan November langsung dipetakan ke `detected_gelombang = 2` dan Oktober ke `detected_gelombang = 1`.
