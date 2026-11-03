@@ -2,7 +2,7 @@
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 [![Build Status](https://github.com/ardianryan/tka-tools/actions/workflows/build.yml/badge.svg)](https://github.com/ardianryan/tka-tools/actions/workflows/build.yml)
-[![Version](https://img.shields.io/badge/Version-1.1.0-emerald.svg)](CHANGELOG.md)
+[![Version](https://img.shields.io/badge/Version-1.1.1-emerald.svg)](CHANGELOG.md)
 [![Platform](https://img.shields.io/badge/Platform-Windows%20%7C%20macOS%20%7C%20Linux-lightgrey.svg)](https://github.com/ardianryan/tka-tools/releases)
 [![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)](CONTRIBUTING.md)
 

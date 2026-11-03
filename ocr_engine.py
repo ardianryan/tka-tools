@@ -130,18 +130,42 @@ def parse_tka_document(ocr_lines: list, full_text: str, header_lines: list = Non
             doc["hari"] = day_num
             break
 
-    m_tgl = re.search(r'(\d{1,2})\s+(?:Januari|Februari|Maret|April|Mei|Juni|Juli|Agustus|September|Oktober|November|Desember)', text, re.I)
+    # Format: "27 Oktober 2026", "2 November 2026", "02 Nopember 2026", etc.
+    MONTH_REGEX = r'(Januari|Februari|Maret|April|Mei|Juni|Juli|Agustus|September|Oktober|November|Nopember|Desember)'
+    m_tgl = re.search(rf'(\d{{1,2}})\s+{MONTH_REGEX}(?:\s+(\d{{4}}))?', text, re.I)
     if m_tgl:
-        tgl_day = m_tgl.group(1)
-        doc["tanggal"] = m_tgl.group(0)
-        if not doc["hari"] and str(tgl_day) in date_day_map:
-            doc["hari"] = int(date_day_map[str(tgl_day)])
+        tgl_day = int(m_tgl.group(1))
+        tgl_month = m_tgl.group(2).capitalize().replace("Nopember", "November")
+        tgl_year = m_tgl.group(3) or "2026"
+        doc["tanggal"] = f"{tgl_day} {tgl_month} {tgl_year}"
+        doc["tanggal_day"] = tgl_day
+        doc["tanggal_month"] = tgl_month
+
+        # Infer Gelombang & Hari from authoritative exam calendar
+        if tgl_month == "November":
+            doc["detected_gelombang"] = 2
+            if not doc["hari"]:
+                day_to_hari_g2 = {2: 1, 3: 2, 4: 3, 5: 4}
+                if tgl_day in day_to_hari_g2:
+                    doc["hari"] = day_to_hari_g2[tgl_day]
+        elif tgl_month == "Oktober":
+            doc["detected_gelombang"] = 1
+            if not doc["hari"]:
+                day_to_hari_g1 = {26: 1, 27: 2, 28: 3, 29: 4}
+                if tgl_day in day_to_hari_g1:
+                    doc["hari"] = day_to_hari_g1[tgl_day]
     elif not doc["hari"]:
         for tgl_k, day_v in date_day_map.items():
             if re.search(rf'\b{tgl_k}\b', text):
                 doc["hari"] = int(day_v)
                 doc["tanggal"] = f"{tgl_k} (Terdeteksi)"
                 break
+
+    # Explicit Gelombang detection from OCR text
+    m_gel = re.search(r'\b(?:gelombang|gel\.?)\s*([1-9])\b', text, re.I)
+    if m_gel:
+        doc["gelombang"] = int(m_gel.group(1))
+        doc["detected_gelombang"] = int(m_gel.group(1))
 
     # 5. Sesi & Jam Detection
     # Extract Jam Pelaksanaan (pukul HH:MM)
@@ -302,6 +326,10 @@ def parse_tka_document(ocr_lines: list, full_text: str, header_lines: list = Non
 class OCREngine:
     def __init__(self, lang="en-US"):
         self.lang = lang
+        self.date_map = {}
+
+    def set_date_map(self, date_map: dict):
+        self.date_map = date_map or {}
 
     async def scan_and_parse_image(self, file_path: str) -> dict:
         img = Image.open(file_path)
@@ -353,35 +381,69 @@ class OCREngine:
         return parsed
 
 
-    def match_slot(self, parsed: dict, portal_slots: list) -> tuple:
+    def match_slot(self, parsed: dict, portal_slots: list, date_map: dict = None) -> tuple:
         """
         Finds best matching slot from the portal rows.
+        Guarantees cross-gelombang protection so Gelombang 2 documents never overwrite Gelombang 1.
         Returns (best_slot, score, explanation)
         """
         best_slot = None
         best_score = 0
         best_reasons = []
 
+        active_date_map = date_map or self.date_map or {}
         target_hari = str(parsed.get("hari")) if parsed.get("hari") else None
         target_sesi = str(parsed.get("sesi")) if parsed.get("sesi") else None
         target_lab = parsed.get("lab_num")
         target_server = parsed.get("kd_server")
+        target_gel = parsed.get("detected_gelombang") or parsed.get("gelombang")
+        doc_day = parsed.get("tanggal_day")
+        doc_month = parsed.get("tanggal_month")
 
         for slot in portal_slots:
             score = 0
             reasons = []
 
-            # 1. Hari match (Weight 30)
+            slot_gel = int(slot.get("gelombang") or 1)
+            slot_hari = int(slot.get("hari") or 1)
+
+            # 1. Gelombang Match & Cross-Gelombang Isolation (Weight 45)
+            if target_gel is not None:
+                if slot_gel == int(target_gel):
+                    score += 45
+                    reasons.append(f"Gelombang {target_gel} cocok")
+                else:
+                    score -= 80
+                    reasons.append(f"Bukan Gelombang {slot_gel}")
+
+            # Specific date comparison if active_date_map is available
+            expected_date = active_date_map.get((slot_gel, slot_hari))
+            if expected_date and doc_month:
+                exp_parts = expected_date.split()
+                if len(exp_parts) >= 2:
+                    try:
+                        exp_day = int(exp_parts[0])
+                        exp_month = exp_parts[1].capitalize().replace("Nopember", "November")
+                        if doc_month == exp_month and doc_day == exp_day:
+                            score += 35
+                            reasons.append(f"Tanggal {expected_date} cocok")
+                        elif doc_month != exp_month:
+                            score -= 60
+                            reasons.append(f"Bulan {doc_month} tidak cocok dengan {exp_month}")
+                    except Exception:
+                        pass
+
+            # 2. Hari match (Weight 30)
             if target_hari and str(slot.get("hari")) == target_hari:
                 score += 30
                 reasons.append(f"Hari {target_hari} cocok")
 
-            # 2. Sesi match (Weight 35)
+            # 3. Sesi match (Weight 35)
             if target_sesi and str(slot.get("sesi")) == target_sesi:
                 score += 35
                 reasons.append(f"Sesi {target_sesi} cocok")
 
-            # 3. Ruang / Lab match (Weight 25)
+            # 4. Ruang / Lab match (Weight 25)
             slot_ruang = slot.get("nm_ruang", "")
             try:
                 from signature_manager import extract_lab_number
@@ -392,14 +454,10 @@ class OCREngine:
                 score += 25
                 reasons.append(f"Lab {target_lab} cocok ({slot_ruang})")
 
-            # 4. Server match (Weight 10)
+            # 5. Server match (Weight 10)
             if target_server and slot.get("kd_server") == target_server:
                 score += 10
                 reasons.append(f"Server {target_server} cocok")
-
-            # Gelombang default = 1
-            if str(slot.get("gelombang")) == "1":
-                score += 5
 
             if score > best_score:
                 best_score = score

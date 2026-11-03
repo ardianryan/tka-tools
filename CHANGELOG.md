@@ -6,6 +6,23 @@ Format berkas ini mengacu pada [Keep a Changelog](https://keepachangelog.com/id/
 
 ---
 
+## [1.1.1] - 2026-11-03
+
+### Diperbaiki (Fixed)
+- **Perbaikan Masalah Timpa Gelombang (*Cross-Gelombang Overwrite Fix*)**:
+  - **Penarikan Tanggal Resmi BAP Dinamis (`get_bap_dates_map`)**: Mengambil tanggal pelaksanaan riil langsung dari API portal BAP (`POST /api/v2/pelaksanaan/cetak`) untuk setiap kombinasi `(gelombang, hari)`. Tanggal disimpan dalam cache persisten (`bap_dates_map.json`) sehingga sistem secara otomatis mengetahui bahwa Gelombang 1 berlangsung pada akhir Oktober 2026 (26–29 Oktober) dan Gelombang 2 berlangsung pada awal November 2026 (2–5 November).
+  - **Inference Gelombang pada OCR Engine**: Ekstraksi bulan dan tanggal pada lembar Daftar Hadir (DH) dan Berita Acara (BAP). Dokumen dengan bulan November langsung dipetakan ke `detected_gelombang = 2` dan Oktober ke `detected_gelombang = 1`.
+  - **Pembobotan Pencocokan Slot OCR Cerdas**: Memberikan bobot tinggi (+45) untuk kesesuaian gelombang dan penalti berat (-80) jika gelombang tidak cocok, serta pencocokan tanggal eksak (+35) terhadap matriks jadwal resmi portal, mencegah lembar Gelombang 2 salah mencocokkan ke slot Gelombang 1.
+  - **Isolasi Ketat Duplikasi Antrean (`find_duplicate_in_queue`)**: Memeriksa kesamaan `gelombang` saat evaluasi duplikasi antrean; lembar Gelombang 2 tidak akan pernah lagi ditandai sebagai duplikat dari Gelombang 1.
+  - **Invalidasi Tanggal Kedaluwarsa pada Penugasan**: `SignatureManager` secara otomatis menghapus tanggal Oktober yang tersimpan pada sesi Gelombang 2 saat sinkronisasi dari portal, mengalokasikannya ke tanggal November yang valid.
+- **Autentisitas & Presisi Cetak Dokumen Berita Acara (BAP)**:
+  - **Ketebalan Garis Bawah Nama & NIP (1.2px)**: Menjamin garis bawah nama proktor, pengawas, penanggung jawab, serta NIP tercetak jelas dan tidak hilang pada printer fisik resolusi tinggi.
+  - **Pencegahan Margin Kanan Terpotong**: Menyesuaikan padding dokumen A4 menjadi 12mm simetris serta layout tabel yang fleksibel, memastikan batas tepi kanan tidak terpotong pada printer Epson L5290 maupun ekspor PDF/JPG.
+  - **Pemantapan Baris ID Server & Ruang**: Menggunakan tabel terstruktur untuk memastikan ID Server dan Ruang selalu berada pada satu baris tanpa penurunan teks (*drop down*).
+  - **Sanitasi NIP Proktor & Pengawas**: Regex sanitizer multi-pola membersihkan seluruh awalan teks `"NIP."` berulang, sehingga hanya mencetak nomor NIP murni sesuai format portal.
+
+---
+
 ## [1.1.0] - 2026-11-02
 
 ### Ditambahkan (Added)

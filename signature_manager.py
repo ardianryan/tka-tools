@@ -376,7 +376,7 @@ class SignatureManager:
         self._save()
         return count
 
-    def sync_from_portal_slots(self, bap_slots: list, dh_slots: list = None) -> dict:
+    def sync_from_portal_slots(self, bap_slots: list, dh_slots: list = None, bap_dates_map: dict = None) -> dict:
         """
         Automatically pulls session slots, dates, rooms, servers, and officer names
         from the portal BAP/DH slots, populating dynamic assignments and auto-registering officers.
@@ -429,8 +429,16 @@ class SignatureManager:
                 if s.get("jam_mulai") and s.get("jam_selesai"):
                     jam_range = f"{s['jam_mulai']} - {s['jam_selesai']}"
 
-                tgl_fallback = default_dates_gel.get(gel, {}).get(hari, "26 Oktober 2026")
-                tgl = s.get("tgl_pelaksanaan") or s.get("tanggal") or existing.get("tanggal") or tgl_fallback
+                tgl_from_bap = bap_dates_map.get((gel, hari)) if bap_dates_map else None
+                if not tgl_from_bap and (s.get("tgl_pelaksanaan") or s.get("tanggal")):
+                    tgl_from_bap = s.get("tgl_pelaksanaan") or s.get("tanggal")
+
+                existing_tgl = existing.get("tanggal")
+                if gel == 2 and existing_tgl and "oktober" in existing_tgl.lower():
+                    existing_tgl = None # Invalidate stale October date on Gelombang 2
+
+                tgl_fallback = default_dates_gel.get(gel, {}).get(hari, "2 November 2026" if gel == 2 else "26 Oktober 2026")
+                tgl = tgl_from_bap or existing_tgl or tgl_fallback
                 jam = jam_range or s.get("jam") or existing.get("jam") or default_times.get(sesi, "07:30 - 09:30")
                 mapel = s.get("keterangan") or s.get("mp") or existing.get("mapel", "-")
                 server = s.get("kd_server") or existing.get("kd_server", "-")

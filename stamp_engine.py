@@ -240,7 +240,7 @@ class StampEngine:
             if not val:
                 return "-"
             s = str(val).strip()
-            s = re.sub(r'^(?:NIP\.?|NIP:?)\s*', '', s, flags=re.I).strip()
+            s = re.sub(r'^(?:NIP[\.\:\s]*)+', '', s, flags=re.I).strip()
             return s if s else "-"
 
         # Replacements
@@ -414,10 +414,10 @@ class StampEngine:
             "{{ jm_tidak_hadir }}": "0",
             "{{ jm_hadir }}": str(slot_data.get("jm_client") or "20"),
             "{{ proktor_nama }}": p_name,
-            "{{ proktor_nip }}": p_nip or "-",
+            "{{ proktor_nip }}": re.sub(r'^(?:NIP[\.\:\s]*)+', '', str(p_nip or "-"), flags=re.I).strip(),
             "{{ proktor_sig_tag }}": p_sig_tag,
             "{{ pengawas_nama }}": pw_name,
-            "{{ pengawas_nip }}": pw_nip or "-",
+            "{{ pengawas_nip }}": re.sub(r'^(?:NIP[\.\:\s]*)+', '', str(pw_nip or "-"), flags=re.I).strip(),
             "{{ pengawas_sig_tag }}": pw_sig_tag,
             "{{ stamp_sig_tag }}": stamp_tag
         }

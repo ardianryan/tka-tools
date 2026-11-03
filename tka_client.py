@@ -421,3 +421,90 @@ class TKAClient:
                 return res.json()
             except Exception:
                 return {"success": False, "msg": f"Server raw response ({res.status_code}): {res.text[:200]}"}
+
+
+    def get_bap_dates_map(self, bap_slots: list = None) -> dict:
+        """
+        Extracts official dates for each (gelombang, hari) pair by querying
+        /api/v2/pelaksanaan/cetak on the portal. Returns a dict mapping:
+        (int(gel), int(hari)) -> "DD Month YYYY" (e.g. (1, 1) -> "26 Oktober 2026")
+        """
+        # Baseline schedule fallback
+        date_map = {
+            (1, 1): "26 Oktober 2026",
+            (1, 2): "27 Oktober 2026",
+            (1, 3): "28 Oktober 2026",
+            (1, 4): "29 Oktober 2026",
+            (2, 1): "2 November 2026",
+            (2, 2): "3 November 2026",
+            (2, 3): "4 November 2026",
+            (2, 4): "5 November 2026",
+            (3, 1): "9 November 2026",
+            (3, 2): "10 November 2026",
+            (3, 3): "11 November 2026",
+            (3, 4): "12 November 2026",
+        }
+
+        # Check local persistent cache file first
+        cache_file = USER_DATA_DIR / "bap_dates_map.json"
+        if cache_file.exists():
+            try:
+                cached_data = json.loads(cache_file.read_text(encoding="utf-8"))
+                for k_str, val in cached_data.items():
+                    parts = k_str.split("_")
+                    if len(parts) == 2:
+                        date_map[(int(parts[0]), int(parts[1]))] = val
+            except Exception as e:
+                logger.debug("Failed reading cached bap_dates_map: %s", e)
+
+        slots = bap_slots or []
+        if not slots and self.is_authenticated:
+            try:
+                slots = self.get_pelaksanaan_slots()
+            except Exception:
+                slots = []
+
+        if not slots or not self.is_authenticated:
+            return date_map
+
+        # Query live dates from portal BAP cetak for filled slots
+        seen_pairs = set()
+        updated_any = False
+        url = f"{self.base_url}/api/v2/pelaksanaan/cetak"
+
+        for s in slots:
+            g = int(s.get("gelombang") or 1)
+            h = int(s.get("hari") or 1)
+            if (g, h) not in seen_pairs and str(s.get("ada")) == "1":
+                seen_pairs.add((g, h))
+                try:
+                    payload = {
+                        "kd_server": s.get("kd_server", "U05120005-AZ5U"),
+                        "no_ruang": s.get("no_ruang", "1"),
+                        "gelombang": str(g),
+                        "hari": str(h),
+                        "sesi": str(s.get("sesi", "1")),
+                        "kd_ujian": s.get("kd_ujian", "U"),
+                        "ajaxToken": "9BAC90BDB622FD822C5F8F9E71086458"
+                    }
+                    res = self._safe_request("POST", url, data=payload, headers={"Referer": f"{self.base_url}/user/pelaksanaan"}, timeout=10)
+                    if res.status_code == 200 and res.text:
+                        clean_html = res.text.replace("&nbsp;", " ")
+                        m = re.search(r'tanggal\s+([0-9]+)\s+bulan\s+([A-Za-z]+)\s+tahun\s+([0-9]{4})', clean_html, re.I)
+                        if m:
+                            tgl, bln, thn = m.groups()
+                            parsed_date = f"{int(tgl)} {bln.capitalize().replace('Nopember', 'November')} {thn}"
+                            date_map[(g, h)] = parsed_date
+                            updated_any = True
+                except Exception as e:
+                    logger.debug("Failed fetching live date for Gel %d Hari %d: %s", g, h, e)
+
+        # Save to cache file if updated
+        if updated_any:
+            try:
+                cache_obj = {f"{k[0]}_{k[1]}": v for k, v in date_map.items()}
+                cache_file.write_text(json.dumps(cache_obj, indent=2, ensure_ascii=False), encoding="utf-8")
+            except Exception as e:
+                logger.debug("Failed saving bap_dates_map cache: %s", e)
+
+        return date_map

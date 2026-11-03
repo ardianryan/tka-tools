@@ -2,7 +2,7 @@
 ; Smart TKA Scanner & Auto-Uploader Installer
 
 #define MyAppName "Smart TKA Scanner"
-#define MyAppVersion "1.1.0"
+#define MyAppVersion "1.1.1"
 #define MyAppPublisher "TKA Tools Community"
 #define MyAppURL "https://github.com/ardianryan/tka-tools"
 #define MyAppExeName "SmartTKAScanner.exe"
@@ -24,7 +24,7 @@ RestartApplications=no
 PrivilegesRequired=lowest
 PrivilegesRequiredOverridesAllowed=dialog
 OutputDir=.
-OutputBaseFilename=SmartTKAScanner-Setup-v1.1.0
+OutputBaseFilename=SmartTKAScanner-Setup-v1.1.1
 SetupIconFile=static\favicon.ico
 Compression=lzma2/ultra64
 SolidCompression=yes
